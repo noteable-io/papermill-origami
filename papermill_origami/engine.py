@@ -4,17 +4,16 @@ It enables papermill to run notebooks against Noteable as though it were executi
 """
 
 import logging
+from contextlib import asynccontextmanager
 from typing import Generator, Optional
 
-from async_generator import asynccontextmanager
 from jupyter_client import KernelManager
+from jupyter_client.utils import run_sync
 from nbclient.exceptions import CellExecutionError
 from nbformat import NotebookNode
 from origami.client import NoteableClient
 from origami.types.files import NotebookFile
-from orgiami.loop import run_sync
 from papermill.engines import Engine, NotebookExecutionManager
-
 
 from .manager import NoteableKernelManager
 
@@ -98,7 +97,7 @@ class NoteableEngine(Engine):
     sync_execute = run_sync(execute)
 
     async def papermill_execute_cells(self):
-        """This function replaces cell execution with it's own wrapper.
+        """This function replaces cell execution with its own wrapper.
 
         We are doing this for the following reasons:
 
@@ -224,3 +223,12 @@ class NoteableEngine(Engine):
         if output and (self.log_output or self.stderr_file or self.stdout_file):
             self.log_output_message(output)
         return output
+
+    @classmethod
+    def nb_kernel_name(cls, nb, name=None):
+        """
+        This method is defined to override the default `Engine.nb_kernel_name` which throws an error
+        when `metadata.kernelspec.name` is not present in the notebook.
+        Noteable notebooks do not store `kernelspec` metadata.
+        """
+        return
