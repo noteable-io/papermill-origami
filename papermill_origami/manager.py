@@ -4,8 +4,8 @@ import functools
 from typing import Optional
 
 from jupyter_client.managerabc import KernelManagerABC
+from jupyter_client.utils import run_sync
 from origami.client import NoteableClient
-from orgiami.loop import run_sync
 from origami.types.files import NotebookFile
 
 
@@ -87,7 +87,7 @@ class NoteableKernelManager(KernelManagerABC):
     start_kernel = run_sync(async_start_kernel)
 
     async def async_shutdown_kernel(self, now=False, restart=False):
-        """Shutsdown the active or pending kernel pod"""
+        """Shutdown the active or pending kernel pod"""
         await self.client.delete_kernel_session(self.file)
 
     shutdown_kernel = run_sync(async_shutdown_kernel)

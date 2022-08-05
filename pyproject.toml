@@ -4,14 +4,14 @@
 # character.
 
 [tool.poetry]
-name = "origami-engine"
+name = "papermill-origami"
 version = "0.0.1"
 description = "The noteable API interface"
 authors = ["Matt Seal <matt@noteable.io>"]
 maintainers = ["Matt Seal <matt@noteable.io>"]
 license = "BSD-3-Clause"
 readme = "README.md"
-repository = "https://github.com/noteable-io/origami-engine"
+repository = "https://github.com/noteable-io/papermill-origami"
 # old setup.cfg had a bdist_wheel option.
 # To build a wheel, use poetry build -f wheel
 keywords = ["notebook", "api", "noteable"]
@@ -29,17 +29,26 @@ classifiers=[
 include = []
 
 [[tool.poetry.source]]
-name = "origami-engine"
+name = "papermill-origami"
 url = "https://pypi.org"
 
 [tool.poetry.dependencies]
 python = "^3.8"
-papermill = "^2.3.4"
+noteable-origami = "^0.0.2"
+papermill = {git = "https://github.com/rohitsanj/papermill.git", branch = "rohit/feature-ignore-kernel-name-with-custom-engine"}
 
 [tool.poetry.dev-dependencies]
 flake8-docstrings = "^1.6.0"
-pytest-httpx = "^0.20.0"
-
+pytest-httpx = "^0.21.0"
+black = {version = "^22.3.0", allow-prereleases = true}
+isort = "^5.10.1"
+boto = "^2.49.0"
+notebook = "^6.4.11"
+pytest = "^7.1.2"
+pytest-cov = "^3.0.0"
+pytest-asyncio = "^0.19.0"
+nox = "^2022.1.7"
+nox-poetry = "^1.0.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -78,7 +87,7 @@ known_third_party = []
 
 [tool.coverage.run]
 branch = false
-omit = ["origami_engine/_version.py", "*/tests/*"]
+omit = ["papermill_origami/_version.py", "*/tests/*"]
 
 [tool.coverage.report]
 exclude_lines = ["if self.debug:",
@@ -87,4 +96,4 @@ exclude_lines = ["if self.debug:",
                  "raise NotImplementedError",
                  "if __name__ == '__main__':"]
 ignore_errors = true
-omit = ["origami_engine/_version.py"]
+omit = ["papermill_origami/_version.py"]

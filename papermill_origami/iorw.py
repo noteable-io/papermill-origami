@@ -2,12 +2,12 @@
 
 import json
 
+from jupyter_client.utils import run_sync
 from origami.client import NoteableClient
-from orgiami.loop import run_sync
 from papermill.exceptions import PapermillException
 
 
-class NoteableHandler(object):
+class NoteableHandler:
     """Defines a class which implements the interface papermill needs to pull and push content
     from Noteable.
     """
