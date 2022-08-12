@@ -8,6 +8,7 @@ from .iorw import NoteableHandler
 
 class NoteableClient(origami.client.NoteableClient):
     """Extended NoteableClient that registers NoteableEngine and NoteableHandler into papermill"""
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         papermill_io.register('noteable://', NoteableHandler(self))
