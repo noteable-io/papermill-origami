@@ -5,9 +5,9 @@ A papermill engine for running Noteable notebooks
 <a href="https://github.com/noteable-io/papermill-origami/actions/workflows/ci.yaml">
     <img src="https://github.com/noteable-io/papermill-origami/actions/workflows/ci.yaml/badge.svg" alt="CI" />
 </a>
-<img alt="PyPI - License" src="https://img.shields.io/pypi/l/noteable-origami" />
-<img alt="PyPI - Python Version" src="https://img.shields.io/pypi/pyversions/noteable-origami" />
-<img alt="PyPI" src="https://img.shields.io/pypi/v/noteable-origami">
+<img alt="PyPI - License" src="https://img.shields.io/pypi/l/papermill-origami" />
+<img alt="PyPI - Python Version" src="https://img.shields.io/pypi/pyversions/papermill-origami" />
+<img alt="PyPI" src="https://img.shields.io/pypi/v/papermill-origami">
 <a href="https://github.com/psf/black"><img alt="Code style: black" src="https://img.shields.io/badge/code%20style-black-000000.svg"></a>
 </p>
 
