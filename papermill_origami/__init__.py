@@ -1,4 +1,5 @@
-from origami.client import ClientConfig, NoteableClient
+from origami.client import ClientConfig
 
 from .engine import NoteableEngine
 from .iorw import NoteableHandler
+from .client import NoteableClient
