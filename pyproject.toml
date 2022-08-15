@@ -35,7 +35,7 @@ url = "https://pypi.org"
 [tool.poetry.dependencies]
 python = "^3.8"
 noteable-origami = "^0.0.2"
-papermill = {git = "https://github.com/rohitsanj/papermill.git", branch = "rohit/feature-ignore-kernel-name-with-custom-engine"}
+papermill = "^2.4.0"
 
 [tool.poetry.dev-dependencies]
 flake8-docstrings = "^1.6.0"
