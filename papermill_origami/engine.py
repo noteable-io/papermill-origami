@@ -80,7 +80,8 @@ class NoteableEngine(Engine):
         """Used to sync the cells of in-memory notebook representation that papermill manages with the Noteable notebook
 
         Papermill injects a new parameters cell with tag `injected-parameters` after a cell tagged `parameters`.
-        This method handles the additions/deletions that must be communicated with the Noteable notebook via NoteableClient
+        This method handles the cell additions/deletions that must be communicated
+        with the Noteable notebook via NoteableClient.
         """
 
         noteable_nb_cell_ids = [cell['id'] for cell in noteable_nb.cells]
