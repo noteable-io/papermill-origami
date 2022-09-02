@@ -14,6 +14,12 @@ def test(session: nox_poetry.Session):
 
 
 @nox_poetry.session(python="3.9")
+def generate_coverage_xml(session: nox_poetry.Session):
+    session.install("coverage[toml]")
+    session.run("coverage", "xml")
+
+
+@nox_poetry.session(python="3.9")
 def lint(session: nox_poetry.Session):
     session.notify("black_check")
     session.notify("flake8")
