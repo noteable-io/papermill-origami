@@ -13,7 +13,7 @@ from nbclient.exceptions import CellExecutionError
 from nbformat import NotebookNode
 from origami.client import NoteableClient
 from origami.types.files import NotebookFile
-from papermill.engines import Engine, NotebookExecutionManager, papermill_engines
+from papermill.engines import Engine, NotebookExecutionManager
 
 from .manager import NoteableKernelManager
 
