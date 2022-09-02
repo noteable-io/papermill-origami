@@ -2,18 +2,18 @@
 
 It enables papermill to run notebooks against Noteable as though it were executing a notebook locally.
 """
-
+import json
 import logging
 from contextlib import asynccontextmanager
 from typing import Generator, Optional
 
-from jupyter_client import KernelManager
+import nbformat
 from jupyter_client.utils import run_sync
 from nbclient.exceptions import CellExecutionError
 from nbformat import NotebookNode
 from origami.client import NoteableClient
 from origami.types.files import NotebookFile
-from papermill.engines import Engine, NotebookExecutionManager
+from papermill.engines import Engine, NotebookExecutionManager, papermill_engines
 
 from .manager import NoteableKernelManager
 
@@ -31,13 +31,13 @@ class NoteableEngine(Engine):
     def __init__(
         self,
         nb_man: NotebookExecutionManager,
-        km: Optional[KernelManager] = None,
+        km: Optional[NoteableKernelManager] = None,
         timeout_func=None,
         timeout: float = None,
         log_output: bool = False,
         stdout_file=None,
         stderr_file=None,
-        **kw
+        **kw,
     ):
         """Initializes the execution manager.
 
@@ -45,7 +45,7 @@ class NoteableEngine(Engine):
         ----------
         nb_man : NotebookExecutionManager
             Notebook execution manager wrapper being executed.
-        km : KernerlManager (optional)
+        km : KernelManager (optional)
             Optional kernel manager. If none is provided, a kernel manager will
             be created.
         """
@@ -62,12 +62,37 @@ class NoteableEngine(Engine):
     async def execute(self, **kwargs):
         """Executes a notebook using Noteable's APIs"""
         async with self.setup_kernel(**kwargs):
-            logger.info("Executing notebook with kernel: %s" % self.kernel_name)
+            file = kwargs['file']
+            noteable_nb = nbformat.reads(
+                file.content if isinstance(file.content, str) else json.dumps(file.content),
+                as_version=4,
+            )
+            await self.sync_noteable_nb_with_papermill(
+                file=file, noteable_nb=noteable_nb, papermill_nb=self.nb
+            )
             await self.papermill_execute_cells()
             # info_msg = self.wait_for_reply(self.kc.kernel_info())
             # self.nb.metadata['language_info'] = info_msg['content']['language_info']
 
         return self.nb
+
+    async def sync_noteable_nb_with_papermill(self, file: NotebookFile, noteable_nb, papermill_nb):
+        """Used to sync the cells of in-memory notebook representation that papermill manages with the Noteable notebook
+
+        Papermill injects a new parameters cell with tag `injected-parameters` after a cell tagged `parameters`.
+        This method handles the additions/deletions that must be communicated with the Noteable notebook via NoteableClient
+        """
+
+        noteable_nb_cell_ids = [cell['id'] for cell in noteable_nb.cells]
+        papermill_nb_cell_ids = [cell['id'] for cell in papermill_nb.cells]
+        deleted_cell_ids = list(set(noteable_nb_cell_ids) - set(papermill_nb_cell_ids))
+        added_cell_ids = list(set(papermill_nb_cell_ids) - set(noteable_nb_cell_ids))
+        for cell_id in deleted_cell_ids:
+            await self.km.client.delete_cell(file, cell_id)
+        for cell_id in added_cell_ids:
+            idx = papermill_nb_cell_ids.index(cell_id)
+            after_id = papermill_nb_cell_ids[idx - 1] if idx > 0 else None
+            await self.km.client.add_cell(file, cell=papermill_nb.cells[idx], after_id=after_id)
 
     def create_kernel_manager(self, file: NotebookFile, client: NoteableClient, **kwargs):
         """Helper that generates a kernel manager object from kwargs"""
