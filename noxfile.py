@@ -4,7 +4,19 @@ import nox_poetry
 LINT_PATHS = ["papermill_origami", "noxfile.py"]
 
 nox.options.reuse_existing_virtualenv = True
-nox.options.sessions = ["lint"]
+nox.options.sessions = ["lint", "test"]
+
+
+@nox_poetry.session(python=["3.8", "3.9", "3.10"])
+def test(session: nox_poetry.Session):
+    session.run_always("poetry", "install", external=True)
+    session.run("pytest", "-v", "--cov=origami")
+
+
+@nox_poetry.session(python="3.9")
+def generate_coverage_xml(session: nox_poetry.Session):
+    session.install("coverage[toml]")
+    session.run("coverage", "xml")
 
 
 @nox_poetry.session(python="3.9")
