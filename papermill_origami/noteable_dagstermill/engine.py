@@ -12,6 +12,17 @@ class NoteableDagstermillEngine(NoteableEngine):
             # Run the Noteable execute cells
             await super().papermill_execute_cells()
         finally:
+            # Look for existing cells with tag `injected-teardown` and delete them
+            injected_teardown_cell_ids = [
+                (idx, cell['id'])
+                for idx, cell in enumerate(self.nb_man.nb.cells)
+                if "injected-teardown" in cell['metadata'].get('tags', [])
+            ]
+
+            for idx, cell_id in injected_teardown_cell_ids:
+                self.nb_man.nb.cells.pop(idx)
+                await self.km.client.delete_cell(self.file, cell_id=cell_id)
+
             # After execution or on error, run the Dagstermill teardown
             new_cell = nbformat.v4.new_code_cell(
                 source="import dagstermill as __dm_dagstermill\n__dm_dagstermill._teardown()\n"

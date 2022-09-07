@@ -260,3 +260,10 @@ class NoteableEngine(Engine):
         Noteable notebooks do not store `kernelspec` metadata.
         """
         return
+
+    @classmethod
+    def nb_language(cls, nb, language=None):
+        try:
+            return super().nb_language(nb, language)
+        except ValueError:
+            return "python"
