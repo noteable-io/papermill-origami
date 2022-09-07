@@ -3,8 +3,7 @@ from papermill.engines import papermill_engines
 from papermill.translators import papermill_translators
 
 from papermill_origami import NoteableEngine
-from papermill_origami.noteable_dagstermill import DagsterTranslator
-from papermill_origami.noteable_dagstermill.engine import NoteableDagstermillEngine
+from papermill_origami.noteable_dagstermill import DagsterTranslator, NoteableDagstermillEngine
 
 
 @pytest.mark.parametrize(
