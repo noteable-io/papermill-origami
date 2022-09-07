@@ -31,6 +31,7 @@ class NoteableEngine(Engine):
     def __init__(
         self,
         nb_man: NotebookExecutionManager,
+        file: NotebookFile,
         km: Optional[NoteableKernelManager] = None,
         timeout_func=None,
         timeout: float = None,
@@ -50,6 +51,7 @@ class NoteableEngine(Engine):
             be created.
         """
         self.nb_man = nb_man
+        self.file = file
         self.km = km
         self.timeout_func = timeout_func
         self.timeout = timeout
