@@ -1,6 +1,7 @@
 """A Papermill engine that combines Dagstermill and Noteable."""
 import nbformat
-from dagstermill.compat import ExecutionError
+from nbclient.exceptions import CellExecutionError
+from papermill import PapermillExecutionError
 
 from ..engine import NoteableEngine
 
@@ -32,7 +33,7 @@ class NoteableDagstermillEngine(NoteableEngine):
             try:
                 self.nb_man.cell_start(new_cell, index)
                 await self.async_execute_cell(new_cell, index)
-            except ExecutionError as ex:
+            except (PapermillExecutionError, CellExecutionError) as ex:
                 self.nb_man.cell_exception(self.nb.cells[index], cell_index=index, exception=ex)
             finally:
                 self.nb_man.cell_complete(self.nb.cells[index], cell_index=index)
