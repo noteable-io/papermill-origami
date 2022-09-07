@@ -1,5 +1,8 @@
-# Copied from https://github.com/dagster-io/dagster/blob/a589f25c8fd37c689426c53b19c90589b18ae0cf/python_modules/libraries/dagstermill/dagstermill/translator.py
-# and fixed the `codify` method to take the comment parameter.
+"""Inject dagstermill specific parameters rather than papermill's.
+
+Copied from https://github.com/dagster-io/dagster/blob/a589f25c8fd37c689426c53b19c90589b18ae0cf/python_modules/libraries/dagstermill/dagstermill/translator.py  # noqa
+and fixed the `codify` method to take the comment parameter.
+"""
 
 import papermill.translators
 from dagster import _seven

@@ -887,7 +887,7 @@ python-versions = ">=3.5"
 
 [[package]]
 name = "noteable-origami"
-version = "0.0.2"
+version = "0.0.3"
 description = "The Noteable API interface"
 category = "main"
 optional = false
@@ -1767,7 +1767,7 @@ dagster = ["dagster"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "04f85218ab876f19b8e0dba405e4524084536f53dec8e9b9178ebbdf003669ce"
+content-hash = "a5e29a402497915a10f12f2170efd3a0ee9050b2e3c42769ad06b437cdb53d94"
 
 [metadata.files]
 alembic = []
