@@ -1,9 +1,11 @@
 """The iorw module provides the handlers for registration with papermill to read/write Notebooks"""
 
 import json
+import httpx
 
 from jupyter_client.utils import run_sync
 from origami.client import NoteableClient
+from origami.types.files import FileVersion
 from papermill.exceptions import PapermillException
 
 
@@ -17,12 +19,20 @@ class NoteableHandler:
         self.client = client
 
     def read(self, path):
-        """Reads a file from the noteable client by id"""
+        """Reads a file from the noteable client by either version id or file id"""
         id = path.split('://')[-1]
         # Wrap the async call since we're in a blocking method
-        file = run_sync(self.client.get_notebook)(id)
+        file_version: FileVersion = run_sync(self.client.get_version_or_none)(id)
+        if file_version is not None:
+            resp = httpx.get(file_version.content_presigned_url)
+            resp.raise_for_status()
+            file_contents = resp.json()
+        else:
+            # Contents of this file is the last saved version (in-flight deltas are not squashed)
+            file = run_sync(self.client.get_notebook)(id)
+            file_contents = file.content
         # Should be a string but the type check also accept JSON
-        return file.content if isinstance(file.content, str) else json.dumps(file.content)
+        return file_contents if isinstance(file_contents, str) else json.dumps(file_contents)
 
     def listdir(self, path):
         """Lists available files in a given path relative to the file's project"""

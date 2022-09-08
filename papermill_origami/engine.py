@@ -26,12 +26,13 @@ class NoteableEngine(Engine):
     @classmethod
     def execute_managed_notebook(cls, nb_man, kernel_name=None, **kwargs):
         """The interface method used by papermill to initiate an execution request"""
+        # __init__ expects client as a required parameter
         return run_sync(cls(nb_man, **kwargs).execute)(kernel_name=kernel_name, **kwargs)
 
     def __init__(
         self,
         nb_man: NotebookExecutionManager,
-        file: NotebookFile,
+        client: NoteableClient,
         km: Optional[NoteableKernelManager] = None,
         timeout_func=None,
         timeout: float = None,
@@ -51,7 +52,7 @@ class NoteableEngine(Engine):
             be created.
         """
         self.nb_man = nb_man
-        self.file = file
+        self.client = client
         self.km = km
         self.timeout_func = timeout_func
         self.timeout = timeout
@@ -63,10 +64,15 @@ class NoteableEngine(Engine):
 
     async def execute(self, **kwargs):
         """Executes a notebook using Noteable's APIs"""
-        async with self.setup_kernel(**kwargs):
-            file = kwargs['file']
+        file_id = kwargs['input_path'].split('://')[-1]
+        # Create the parameterized_notebook
+        file = await self.client.create_parameterized_notebook(file_id)
+
+        async with self.setup_kernel(file=file, **kwargs):
             noteable_nb = nbformat.reads(
-                file.content if isinstance(file.content, str) else json.dumps(file.content),
+                file.content
+                if isinstance(file.content, str)
+                else json.dumps(file.content),
                 as_version=4,
             )
             await self.sync_noteable_nb_with_papermill(
