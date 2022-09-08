@@ -1,10 +1,16 @@
+import copy
 import os
-import pickle
+from base64 import b64encode
+
+import dill as pickle
+
+# import pickle
 import sys
 import tempfile
 import uuid
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Union, cast
 
+import nbformat
 import papermill
 from dagster import In, OpDefinition, Out
 from dagster import _check as check
@@ -20,14 +26,22 @@ from dagster._legacy import InputDefinition, OutputDefinition, SolidDefinition
 from dagster._utils import safe_tempfile_path
 from dagster._utils.backcompat import rename_warning
 from dagster._utils.error import serializable_error_info_from_exc_info
+from dagstermill import _reconstitute_pipeline_context, _load_input_parameter
 from dagstermill.compat import ExecutionError
-from dagstermill.factory import get_papermill_parameters, replace_parameters
+from dagstermill.factory import (
+    get_papermill_parameters,
+    _find_first_tagged_cell_index,
+)
 from jupyter_client.utils import run_sync
 from origami.client import ClientConfig
 from origami.types.files import NotebookFile
 from papermill.iorw import load_notebook_node, write_ipynb
-
 from ..client import NoteableClient
+
+import sys
+
+# sys.path.insert(0, "/home/eli/noteable-io/papermill-origami/tmp/noteable_dagstermill2")
+from .context import SerializableExecutionContext
 
 
 def _dm_compute(
@@ -74,16 +88,78 @@ def _dm_compute(
                 compute_descriptor = (
                     "solid" if dagster_factory_name == "define_dagstermill_solid" else "op"
                 )
-                nb_no_parameters = replace_parameters(
+
+                parameters = get_papermill_parameters(
                     step_execution_context,
-                    nb,
-                    get_papermill_parameters(
-                        step_execution_context,
-                        inputs,
-                        output_log_path,
-                        compute_descriptor,
-                    ),
+                    inputs,
+                    output_log_path,
+                    compute_descriptor,
                 )
+                context_args = parameters["__dm_context"]
+                pipeline_context_args = dict(
+                    executable_dict=parameters["__dm_executable_dict"],
+                    pipeline_run_dict=parameters["__dm_pipeline_run_dict"],
+                    solid_handle_kwargs=parameters["__dm_solid_handle_kwargs"],
+                    instance_ref_dict=parameters["__dm_instance_ref_dict"],
+                    step_key=parameters["__dm_step_key"],
+                    **context_args,
+                )
+                reconstituted_pipeline_context = _reconstitute_pipeline_context(
+                    **pipeline_context_args
+                )
+                serializable_ctx = SerializableExecutionContext(
+                    pipeline_tags=reconstituted_pipeline_context._pipeline_context.log.logging_metadata.pipeline_tags,
+                    op_config=reconstituted_pipeline_context.op_config,
+                    resources=reconstituted_pipeline_context.resources,
+                    run_id=reconstituted_pipeline_context.run_id,
+                    run=reconstituted_pipeline_context.run,
+                )
+                serialized = serializable_ctx.dumps()
+                serialized_context_b64 = b64encode(serialized).decode("utf-8")
+                load_input_template = "dill.loads(b64decode({serialized_val}))"
+                input_parameters = "\n".join(
+                    [
+                        f"{input_name} = {load_input_template.format(serialized_val=b64encode(_load_input_parameter(input_name)))}"
+                        for input_name in parameters["__dm_input_names"]
+                    ]
+                )
+
+                template = f"""# Injected parameters
+import dill
+from base64 import b64decode
+
+serialized_context_b64 = "{serialized_context_b64}"
+serialized_context = b64decode(serialized_context_b64)
+
+context = dill.loads(serialized_context)
+{input_parameters}
+"""
+
+                nb_no_parameters = copy.deepcopy(nb)
+                newcell = nbformat.v4.new_code_cell(source=template)
+                newcell.metadata["tags"] = ["injected-parameters"]
+
+                param_cell_index = _find_first_tagged_cell_index(nb_no_parameters, "parameters")
+                injected_cell_index = _find_first_tagged_cell_index(
+                    nb_no_parameters, "injected-parameters"
+                )
+                if injected_cell_index >= 0:
+                    # Replace the injected cell with a new version
+                    before = nb_no_parameters.cells[:injected_cell_index]
+                    after = nb_no_parameters.cells[injected_cell_index + 1 :]
+                    check.int_value_param(param_cell_index, -1, "param_cell_index")
+                    # We should have blown away the parameters cell if there is an injected-parameters cell
+                elif param_cell_index >= 0:
+                    # Replace the parameter cell with the injected-parameters cell
+                    before = nb_no_parameters.cells[:param_cell_index]
+                    after = nb_no_parameters.cells[param_cell_index + 1 :]
+                else:
+                    # Inject to the top of the notebook, presumably first cell includes dagstermill import
+                    before = []
+                    after = nb_no_parameters.cells
+                nb_no_parameters.cells = before + [newcell] + after
+                # nb_no_parameters.metadata.papermill["parameters"] = _seven.json.dumps(parameters)
+
                 write_ipynb(nb_no_parameters, parameterized_notebook_path)
 
                 try:
