@@ -13,6 +13,7 @@ from nbclient.exceptions import CellExecutionError
 from nbformat import NotebookNode
 from origami.client import NoteableClient
 from origami.types.files import NotebookFile
+from origami.types.jobs import JobInstanceAttempt
 from papermill.engines import Engine, NotebookExecutionManager
 
 from .manager import NoteableKernelManager
@@ -26,8 +27,9 @@ class NoteableEngine(Engine):
     @classmethod
     def execute_managed_notebook(cls, nb_man, kernel_name=None, **kwargs):
         """The interface method used by papermill to initiate an execution request"""
-        # __init__ expects client as a required parameter
-        return run_sync(cls(nb_man, **kwargs).execute)(kernel_name=kernel_name, **kwargs)
+        return run_sync(cls(nb_man, client=kwargs.pop('client'), **kwargs).execute)(
+            kernel_name=kernel_name, **kwargs
+        )
 
     def __init__(
         self,
@@ -64,15 +66,20 @@ class NoteableEngine(Engine):
 
     async def execute(self, **kwargs):
         """Executes a notebook using Noteable's APIs"""
-        file_id = kwargs['input_path'].split('://')[-1]
-        # Create the parameterized_notebook
-        file = await self.client.create_parameterized_notebook(file_id)
+        # The original notebook id can either be the notebook file id or notebook version id
+        original_notebook_id = kwargs['input_path'].split('://')[-1]
+        job_instance_attempt = kwargs.get('job_instance_attempt')
+        if job_instance_attempt:
+            job_instance_attempt = JobInstanceAttempt.parse_obj(job_instance_attempt)
 
-        async with self.setup_kernel(file=file, **kwargs):
+        # Create the parameterized_notebook
+        file = await self.client.create_parameterized_notebook(
+            original_notebook_id, job_instance_attempt=job_instance_attempt
+        )
+
+        async with self.setup_kernel(file=file, client=self.client, **kwargs):
             noteable_nb = nbformat.reads(
-                file.content
-                if isinstance(file.content, str)
-                else json.dumps(file.content),
+                file.content if isinstance(file.content, str) else json.dumps(file.content),
                 as_version=4,
             )
             await self.sync_noteable_nb_with_papermill(
@@ -103,7 +110,8 @@ class NoteableEngine(Engine):
             after_id = papermill_nb_cell_ids[idx - 1] if idx > 0 else None
             await self.km.client.add_cell(file, cell=papermill_nb.cells[idx], after_id=after_id)
 
-    def create_kernel_manager(self, file: NotebookFile, client: NoteableClient, **kwargs):
+    @staticmethod
+    def create_kernel_manager(file: NotebookFile, client: NoteableClient, **kwargs):
         """Helper that generates a kernel manager object from kwargs"""
         return NoteableKernelManager(file, client, **kwargs)
 
@@ -115,7 +123,7 @@ class NoteableEngine(Engine):
             self.km = self.create_kernel_manager(**kwargs)
 
         # Subscribe to the file or we won't see status updates
-        await self.km.client.subscribe_file(self.km.file)
+        await self.client.subscribe_file(self.km.file)
         await self.km.async_start_kernel(**kwargs)
         try:
             yield
