@@ -11,6 +11,7 @@ from papermill.engines import papermill_engines
 from papermill.translators import papermill_translators
 
 from .engine import NoteableDagstermillEngine
+from .ops import define_noteable_dagstermill_op  # noqa: F401
 from .translator import DagsterTranslator
 
 papermill_engines.register("noteable-dagstermill", NoteableDagstermillEngine)
