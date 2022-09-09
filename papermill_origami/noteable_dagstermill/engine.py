@@ -7,6 +7,12 @@ from ..engine import NoteableEngine
 
 
 class NoteableDagstermillEngine(NoteableEngine):
+    async def execute(self, **kwargs):
+        job_metadata = kwargs.setdefault("job_metadata", {})
+        job_metadata["orchestrator_id"] = "dagster"
+        job_metadata["orchestrator_name"] = "Dagster"
+        return await super().execute(**kwargs)
+
     async def papermill_execute_cells(self):
         try:
             # Run the Noteable execute cells

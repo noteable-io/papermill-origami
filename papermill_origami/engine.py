@@ -13,7 +13,12 @@ from nbclient.exceptions import CellExecutionError
 from nbformat import NotebookNode
 from origami.client import NoteableClient
 from origami.types.files import NotebookFile
-from origami.types.jobs import JobInstanceAttempt
+from origami.types.jobs import (
+    CustomerJobDefinitionReferenceInput,
+    CustomerJobInstanceReferenceInput,
+    JobInstanceAttempt,
+    JobInstanceAttemptStatus,
+)
 from papermill.engines import Engine, NotebookExecutionManager
 
 from .manager import NoteableKernelManager
@@ -63,35 +68,61 @@ class NoteableEngine(Engine):
         self.stderr_file = stderr_file
         self.kernel_name = kw.get('kernel_name', '__NOT_SET__')
         self.nb = nb_man.nb
+        self.file = None
 
     async def execute(self, **kwargs):
         """Executes a notebook using Noteable's APIs"""
         # The original notebook id can either be the notebook file id or notebook version id
-        original_notebook_id = kwargs['input_path'].split('://')[-1]
-        job_instance_attempt = kwargs.get('job_instance_attempt')
-        if job_instance_attempt:
-            job_instance_attempt = JobInstanceAttempt.parse_obj(job_instance_attempt)
+        original_notebook_id = kwargs["file_id"]
+        self.file = await self.client.get_notebook(kwargs["file_id"])
+        job_instance_attempt = None
+
+        if job_metadata := kwargs.get("job_metadata", {}):
+            # 1: Ensure the job definition&instance references exists
+            job_instance = await self.client.create_job_instance(
+                CustomerJobInstanceReferenceInput(
+                    orchestrator_job_instance_id=job_metadata.get('job_instance_id'),
+                    orchestrator_job_instance_uri=job_metadata.get('job_instance_uri'),
+                    customer_job_definition_reference=CustomerJobDefinitionReferenceInput(
+                        space_id=self.file.space_id,
+                        orchestrator_id=job_metadata.get('orchestrator_id'),
+                        orchestrator_name=job_metadata.get('orchestrator_name'),
+                        orchestrator_uri=job_metadata.get('orchestrator_uri'),
+                        orchestrator_job_definition_id=job_metadata.get('job_definition_id'),
+                        orchestrator_job_definition_uri=job_metadata.get('job_definition_uri'),
+                    ),
+                )
+            )
+
+            # 2: Set up the job instance attempt
+            # TODO: update the job instance attempt status while running/after completion
+            job_instance_attempt = JobInstanceAttempt(
+                status=JobInstanceAttemptStatus.CREATED,
+                attempt_number=0,
+                customer_job_instance_reference_id=job_instance.id,
+            )
 
         # Create the parameterized_notebook
-        file = await self.client.create_parameterized_notebook(
+        _file = await self.client.create_parameterized_notebook(
             original_notebook_id, job_instance_attempt=job_instance_attempt
         )
-        print(f"Created parameterized notebook with file id {file.id}")
+        print(f"Created parameterized notebook with file id {_file.id}")
         # TODO: We need this delay in order to successfully subscribe to the files channel
         #       of the newly created parameterized notebook.
         # from asyncio import sleep
         # await sleep(1)
         # TODO: Until execute requests are fixed on parameterized notebooks, we will use the original
-        #       notebook for execution. We override the file variable here with the original notebook.
-        file = await self.client.get_notebook(original_notebook_id)
+        #       notebook for execution.
 
-        async with self.setup_kernel(file=file, client=self.client, **kwargs):
+        async with self.setup_kernel(file=self.file, client=self.client, **kwargs):
             noteable_nb = nbformat.reads(
-                file.content if isinstance(file.content, str) else json.dumps(file.content),
+                self.file.content
+                if isinstance(self.file.content, str)
+                else json.dumps(self.file.content),
                 as_version=4,
             )
             await self.sync_noteable_nb_with_papermill(
-                file=file, noteable_nb=noteable_nb, papermill_nb=self.nb
+                file=self.file, noteable_nb=noteable_nb, papermill_nb=self.nb
             )
             await self.papermill_execute_cells()
             # info_msg = self.wait_for_reply(self.kc.kernel_info())
