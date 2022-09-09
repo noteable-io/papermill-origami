@@ -204,6 +204,14 @@ optional = false
 python-versions = "*"
 
 [[package]]
+name = "bump2version"
+version = "1.0.1"
+description = "Version-bump your software with a single command!"
+category = "dev"
+optional = false
+python-versions = ">=3.5"
+
+[[package]]
 name = "certifi"
 version = "2022.6.15"
 description = "Python package for providing Mozilla's CA Bundle."
@@ -1930,7 +1938,7 @@ dagster = ["dagstermill"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "73334386c952fd5113996aad299a70c43ea39cd0354d92a16528f39c4da14940"
+content-hash = "c72a3e1d4a45ee34ecc27676c9c703b091526f14d3853a8e51a0581a877ea7bf"
 
 [metadata.files]
 alembic = []
@@ -1988,6 +1996,10 @@ bitmath = [
 black = []
 bleach = []
 boto = []
+bump2version = [
+    {file = "bump2version-1.0.1-py2.py3-none-any.whl", hash = "sha256:37f927ea17cde7ae2d7baf832f8e80ce3777624554a653006c9144f8017fe410"},
+    {file = "bump2version-1.0.1.tar.gz", hash = "sha256:762cb2bfad61f4ec8e2bdf452c7c267416f8c70dd9ecb1653fd0bbb01fa936e6"},
+]
 certifi = [
     {file = "certifi-2022.6.15-py3-none-any.whl", hash = "sha256:fe86415d55e84719d75f8b69414f6438ac3547d2078ab91b67e779ef69378412"},
     {file = "certifi-2022.6.15.tar.gz", hash = "sha256:84c85a9078b11105f04f3036a9482ae10e4621616db313fe045dd24743a0820d"},
