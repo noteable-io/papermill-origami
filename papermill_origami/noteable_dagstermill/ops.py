@@ -32,6 +32,7 @@ from papermill.iorw import load_notebook_node, write_ipynb
 from papermill.translators import PythonTranslator
 
 from ..client import NoteableClient
+from ..util import removeprefix
 from .context import SerializableExecutionContext
 
 
@@ -88,7 +89,7 @@ def _dm_compute(
                 )
                 job_definition_id = step_execution_context.job_name
                 job_instance_id = step_execution_context.run_id
-                file_id = notebook_path.removeprefix("noteable://")
+                file_id = removeprefix(notebook_path, "noteable://")
                 noteable_parameters = {
                     'job_definition_id': job_definition_id,
                     'job_instance_id': job_instance_id,
