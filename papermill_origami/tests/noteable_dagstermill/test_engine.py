@@ -9,10 +9,14 @@ from papermill_origami.noteable_dagstermill.engine import NoteableDagstermillEng
 def noteable_dagstermill_engine(mocker, file, file_content):
     kernel_manager = mocker.Mock()
     kernel_manager.file = file
-    kernel_manager.client = mocker.AsyncMock()
+    client = mocker.AsyncMock()
+    client.get_notebook.return_value = file
+    kernel_manager.client = client
     nb_manager = mocker.Mock()
     nb_manager.nb = file_content
-    return NoteableDagstermillEngine(nb_man=nb_manager, file=file, km=kernel_manager)
+    engine = NoteableDagstermillEngine(nb_man=nb_manager, client=client, km=kernel_manager)
+    engine.file = file
+    return engine
 
 
 class TestPapermillExecuteCells:

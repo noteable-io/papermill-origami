@@ -36,4 +36,6 @@ def file(file_content):
 
 @pytest.fixture
 def noteable_engine(mocker, file):
-    return NoteableEngine(nb_man=mocker.Mock(), km=mocker.Mock(), file=file)
+    mock_noteable_client = mocker.AsyncMock()
+    mock_noteable_client.get_notebook.return_value = file
+    return NoteableEngine(nb_man=mocker.Mock(), km=mocker.Mock(), client=mock_noteable_client)
