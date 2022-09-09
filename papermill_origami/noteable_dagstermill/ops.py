@@ -183,9 +183,7 @@ context = cloudpickle.loads(serialized_context)
                     )
                 except Exception as ex:
                     step_execution_context.log.warn(
-                        "Error when attempting to materialize executed notebook: {exc}".format(
-                            exc=str(serializable_error_info_from_exc_info(sys.exc_info()))
-                        )
+                        f"Error when attempting to materialize executed notebook: {serializable_error_info_from_exc_info(sys.exc_info())}"  # noqa: E501
                     )
                     # pylint: disable=no-member
                     # compat:
@@ -202,10 +200,7 @@ context = cloudpickle.loads(serialized_context)
                     run_sync(noteable_client.__aexit__)(None, None, None)
 
             step_execution_context.log.debug(
-                "Notebook execution complete for {name} at {executed_notebook_path}.".format(
-                    name=name,
-                    executed_notebook_path=executed_notebook_path,
-                )
+                f"Notebook execution complete for {name} at {executed_notebook_path}."
             )
             if output_notebook_name is not None:
                 # yield output notebook binary stream as a solid output
