@@ -28,7 +28,6 @@ from dagstermill.compat import ExecutionError
 from dagstermill.factory import _find_first_tagged_cell_index, get_papermill_parameters
 from jupyter_client.utils import run_sync
 from origami.client import ClientConfig
-from origami.types.files import NotebookFile
 from papermill.iorw import load_notebook_node, write_ipynb
 from papermill.translators import PythonTranslator
 
@@ -89,7 +88,7 @@ def _dm_compute(
                 )
                 job_definition_id = step_execution_context.job_name
                 job_instance_id = step_execution_context.run_id
-                file_id = notebook_path.lstrip("noteable://")
+                file_id = notebook_path.removeprefix("noteable://")
                 noteable_parameters = {
                     'job_definition_id': job_definition_id,
                     'job_instance_id': job_instance_id,
@@ -169,17 +168,18 @@ context = cloudpickle.loads(serialized_context)
                 write_ipynb(nb_no_parameters, parameterized_notebook_path)
 
                 try:
-                    # noteable specific code
-                    file: NotebookFile = run_sync(noteable_client.get_notebook)(file_id)
-
                     papermill.execute_notebook(
                         input_path=parameterized_notebook_path,
                         output_path=executed_notebook_path,
                         engine_name="noteable-dagstermill",  # noteable specific
                         log_output=True,
                         # noteable specific args
-                        file=file,
+                        file_id=file_id,
                         client=noteable_client,
+                        job_metadata={
+                            'job_definition_id': job_definition_id,
+                            'job_instance_id': job_instance_id,
+                        },
                     )
                 except Exception as ex:
                     step_execution_context.log.warn(
