@@ -10,6 +10,7 @@ from dagster._core.execution.context.compute import AbstractComputeExecutionCont
 
 
 class SerializableExecutionContext(AbstractComputeExecutionContext):
+    """The execution context for a papermill_origami run."""
     def __init__(self, pipeline_tags, op_config, resources, run_id, run, solid_handle) -> None:
         self._pipeline_tags = pipeline_tags
         self._op_config = op_config
