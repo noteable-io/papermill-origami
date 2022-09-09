@@ -5,7 +5,7 @@ from typing import Any, Optional, Union, cast
 import cloudpickle
 import dagster._check as check
 from dagster import DagsterLogManager, DagsterRun, JobDefinition, OpDefinition
-from dagster._core.definitions import SolidDefinition, NodeHandle, Node
+from dagster._core.definitions import Node, NodeHandle, SolidDefinition
 from dagster._core.execution.context.compute import AbstractComputeExecutionContext
 
 
@@ -84,14 +84,6 @@ class SerializableExecutionContext(AbstractComputeExecutionContext):
     @property
     def op_config(self) -> Any:
         return self._op_config
-
-    @property
-    def resources(self) -> Any:
-        """collections.namedtuple: A dynamically-created type whose properties allow access to
-        resources."""
-        return self._pipeline_context.scoped_resources_builder.build(
-            required_resource_keys=self._resource_keys_to_init,
-        )
 
     @classmethod
     def load(cls, path: Union[str, Path]) -> 'SerializableExecutionContext':

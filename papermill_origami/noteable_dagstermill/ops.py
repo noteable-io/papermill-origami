@@ -1,15 +1,13 @@
 import copy
 import os
-from base64 import b64encode
-
-import cloudpickle as pickle
-
 # import pickle
 import sys
 import tempfile
 import uuid
+from base64 import b64encode
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Union, cast
 
+import cloudpickle as pickle
 import nbformat
 import papermill
 from dagster import In, OpDefinition, Out
@@ -26,21 +24,16 @@ from dagster._legacy import InputDefinition, OutputDefinition, SolidDefinition
 from dagster._utils import safe_tempfile_path
 from dagster._utils.backcompat import rename_warning
 from dagster._utils.error import serializable_error_info_from_exc_info
-from dagstermill import _reconstitute_pipeline_context, _load_input_parameter
+from dagstermill import _load_input_parameter, _reconstitute_pipeline_context
 from dagstermill.compat import ExecutionError
-from dagstermill.factory import (
-    get_papermill_parameters,
-    _find_first_tagged_cell_index,
-)
+from dagstermill.factory import _find_first_tagged_cell_index, get_papermill_parameters
 from jupyter_client.utils import run_sync
 from origami.client import ClientConfig
 from origami.types.files import NotebookFile
 from papermill.iorw import load_notebook_node, write_ipynb
 from papermill.translators import PythonTranslator
+
 from ..client import NoteableClient
-
-import sys
-
 from .context import SerializableExecutionContext
 
 
@@ -126,14 +119,17 @@ def _dm_compute(
                 serialized = serializable_ctx.dumps()
                 serialized_context_b64 = b64encode(serialized).decode("utf-8")
                 load_input_template = "cloudpickle.loads(b64decode({serialized_val}))"
-                input_parameters = PythonTranslator().codify(
-                    noteable_parameters, "Noteable provided parameters"
-                ) + "\n# Dagster provded parameter inputs\n" + "\n".join(
-                    [
-                        f"{input_name} = {load_input_template.format(serialized_val=b64encode(pickle.dumps(_load_input_parameter(input_name))))}"
-                        for input_name in base_parameters["__dm_input_names"]
-                    ]
-                )
+                input_params_list = [
+                    PythonTranslator().codify(noteable_parameters, "Noteable provided parameters"),
+                    "\n# Dagster provided parameter inputs\n",
+                    "\n".join(
+                        [
+                            f"{input_name} = {load_input_template.format(serialized_val=b64encode(pickle.dumps(_load_input_parameter(input_name))))}"  # noqa: E501
+                            for input_name in base_parameters["__dm_input_names"]
+                        ]
+                    ),
+                ]
+                input_parameters = "".join(input_params_list)
 
                 template = f"""# Injected parameters
 import cloudpickle
