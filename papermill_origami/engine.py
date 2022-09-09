@@ -76,6 +76,14 @@ class NoteableEngine(Engine):
         file = await self.client.create_parameterized_notebook(
             original_notebook_id, job_instance_attempt=job_instance_attempt
         )
+        print(f"Created parameterized notebook with file id {file.id}")
+        # TODO: We need this delay in order to successfully subscribe to the files channel
+        #       of the newly created parameterized notebook.
+        # from asyncio import sleep
+        # await sleep(1)
+        # TODO: Until execute requests are fixed on parameterized notebooks, we will use the original
+        #       notebook for execution. We override the file variable here with the original notebook.
+        file = await self.client.get_notebook(original_notebook_id)
 
         async with self.setup_kernel(file=file, client=self.client, **kwargs):
             noteable_nb = nbformat.reads(
