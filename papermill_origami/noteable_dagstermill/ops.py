@@ -2,7 +2,7 @@ import copy
 import os
 from base64 import b64encode
 
-import dill as pickle
+import cloudpickle as pickle
 
 # import pickle
 import sys
@@ -36,11 +36,11 @@ from jupyter_client.utils import run_sync
 from origami.client import ClientConfig
 from origami.types.files import NotebookFile
 from papermill.iorw import load_notebook_node, write_ipynb
+from papermill.translators import PythonTranslator
 from ..client import NoteableClient
 
 import sys
 
-# sys.path.insert(0, "/home/eli/noteable-io/papermill-origami/tmp/noteable_dagstermill2")
 from .context import SerializableExecutionContext
 
 
@@ -89,19 +89,27 @@ def _dm_compute(
                     "solid" if dagster_factory_name == "define_dagstermill_solid" else "op"
                 )
 
-                parameters = get_papermill_parameters(
+                base_parameters = get_papermill_parameters(
                     step_execution_context,
                     inputs,
                     output_log_path,
                     compute_descriptor,
                 )
-                context_args = parameters["__dm_context"]
+                job_definition_id = step_execution_context.job_name
+                job_instance_id = step_execution_context.run_id
+                file_id = notebook_path.lstrip("noteable://")
+                noteable_parameters = {
+                    'job_definition_id': job_definition_id,
+                    'job_instance_id': job_instance_id,
+                    'file_id': file_id,
+                }
+                context_args = base_parameters["__dm_context"]
                 pipeline_context_args = dict(
-                    executable_dict=parameters["__dm_executable_dict"],
-                    pipeline_run_dict=parameters["__dm_pipeline_run_dict"],
-                    solid_handle_kwargs=parameters["__dm_solid_handle_kwargs"],
-                    instance_ref_dict=parameters["__dm_instance_ref_dict"],
-                    step_key=parameters["__dm_step_key"],
+                    executable_dict=base_parameters["__dm_executable_dict"],
+                    pipeline_run_dict=base_parameters["__dm_pipeline_run_dict"],
+                    solid_handle_kwargs=base_parameters["__dm_solid_handle_kwargs"],
+                    instance_ref_dict=base_parameters["__dm_instance_ref_dict"],
+                    step_key=base_parameters["__dm_step_key"],
                     **context_args,
                 )
                 reconstituted_pipeline_context = _reconstitute_pipeline_context(
@@ -113,25 +121,28 @@ def _dm_compute(
                     resources=reconstituted_pipeline_context.resources,
                     run_id=reconstituted_pipeline_context.run_id,
                     run=reconstituted_pipeline_context.run,
+                    solid_handle=reconstituted_pipeline_context.solid_handle,
                 )
                 serialized = serializable_ctx.dumps()
                 serialized_context_b64 = b64encode(serialized).decode("utf-8")
-                load_input_template = "dill.loads(b64decode({serialized_val}))"
-                input_parameters = "\n".join(
+                load_input_template = "cloudpickle.loads(b64decode({serialized_val}))"
+                input_parameters = PythonTranslator().codify(
+                    noteable_parameters, "Noteable provided parameters"
+                ) + "\n# Dagster provded parameter inputs\n" + "\n".join(
                     [
-                        f"{input_name} = {load_input_template.format(serialized_val=b64encode(_load_input_parameter(input_name)))}"
-                        for input_name in parameters["__dm_input_names"]
+                        f"{input_name} = {load_input_template.format(serialized_val=b64encode(pickle.dumps(_load_input_parameter(input_name))))}"
+                        for input_name in base_parameters["__dm_input_names"]
                     ]
                 )
 
                 template = f"""# Injected parameters
-import dill
+import cloudpickle
 from base64 import b64decode
 
 serialized_context_b64 = "{serialized_context_b64}"
 serialized_context = b64decode(serialized_context_b64)
 
-context = dill.loads(serialized_context)
+context = cloudpickle.loads(serialized_context)
 {input_parameters}
 """
 
@@ -164,10 +175,6 @@ context = dill.loads(serialized_context)
 
                 try:
                     # noteable specific code
-                    # TODO: parameterize the file
-                    job_definition_id = step_execution_context.job_name
-                    job_instance_id = step_execution_context.run_id
-                    file_id = notebook_path.removeprefix("noteable://")
                     file: NotebookFile = run_sync(noteable_client.get_notebook)(file_id)
 
                     papermill.execute_notebook(
