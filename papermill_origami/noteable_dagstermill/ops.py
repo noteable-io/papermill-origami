@@ -181,6 +181,7 @@ context = cloudpickle.loads(serialized_context)
                             'job_definition_id': job_definition_id,
                             'job_instance_id': job_instance_id,
                         },
+                        logger=step_execution_context.log,
                     )
                 except Exception as ex:
                     step_execution_context.log.warn(

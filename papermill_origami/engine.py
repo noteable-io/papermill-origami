@@ -72,6 +72,8 @@ class NoteableEngine(Engine):
 
     async def execute(self, **kwargs):
         """Executes a notebook using Noteable's APIs"""
+        dagster_logger = kwargs["logger"]
+
         # The original notebook id can either be the notebook file id or notebook version id
         original_notebook_id = kwargs["file_id"]
         self.file = await self.client.get_notebook(kwargs["file_id"])
@@ -103,10 +105,12 @@ class NoteableEngine(Engine):
             )
 
         # Create the parameterized_notebook
-        _file = await self.client.create_parameterized_notebook(
+        self.file = await self.client.create_parameterized_notebook(
             original_notebook_id, job_instance_attempt=job_instance_attempt
         )
-        print(f"Created parameterized notebook with file id {_file.id}")
+        dagster_logger.info(
+            f"Parameterized notebook available at https://{self.client.config.domain}/f/{self.file.id}"
+        )
         # TODO: We need this delay in order to successfully subscribe to the files channel
         #       of the newly created parameterized notebook.
         # from asyncio import sleep
