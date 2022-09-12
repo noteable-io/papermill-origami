@@ -130,7 +130,10 @@ class NoteableEngine(Engine):
                 as_version=4,
             )
             await self.sync_noteable_nb_with_papermill(
-                file=self.file, noteable_nb=noteable_nb, papermill_nb=self.nb
+                file=self.file,
+                noteable_nb=noteable_nb,
+                papermill_nb=self.nb,
+                dagster_logger=dagster_logger,
             )
             await self.papermill_execute_cells()
             # info_msg = self.wait_for_reply(self.kc.kernel_info())
@@ -138,7 +141,9 @@ class NoteableEngine(Engine):
 
         return self.nb
 
-    async def sync_noteable_nb_with_papermill(self, file: NotebookFile, noteable_nb, papermill_nb):
+    async def sync_noteable_nb_with_papermill(
+        self, file: NotebookFile, noteable_nb, papermill_nb, dagster_logger
+    ):
         """Used to sync the cells of in-memory notebook representation that papermill manages with the Noteable notebook
 
         Papermill injects a new parameters cell with tag `injected-parameters` after a cell tagged `parameters`.
@@ -157,6 +162,11 @@ class NoteableEngine(Engine):
             after_id = papermill_nb_cell_ids[idx - 1] if idx > 0 else None
             await self.km.client.add_cell(file, cell=papermill_nb.cells[idx], after_id=after_id)
 
+        dagster_logger.info(
+            "Synced notebook with Noteable, "
+            f"added {len(added_cell_ids)} cells and deleted {len(deleted_cell_ids)} cells"
+        )
+
     @staticmethod
     def create_kernel_manager(file: NotebookFile, client: NoteableClient, **kwargs):
         """Helper that generates a kernel manager object from kwargs"""
@@ -165,13 +175,20 @@ class NoteableEngine(Engine):
     @asynccontextmanager
     async def setup_kernel(self, cleanup_kc=True, cleanup_kc_on_error=False, **kwargs) -> Generator:
         """Context manager for setting up the kernel to execute a notebook."""
+        dagster_logger = kwargs["logger"]
+
         if self.km is None:
             # Assumes that file and client are being passed in
             self.km = self.create_kernel_manager(**kwargs)
+            dagster_logger.info(f"Created kernel manager for {self.kernel_name}")
 
         # Subscribe to the file or we won't see status updates
         await self.client.subscribe_file(self.km.file)
+        dagster_logger.info("Subscribed to file")
+
         await self.km.async_start_kernel(**kwargs)
+        dagster_logger.info("Started kernel")
+
         try:
             yield
             # if cleanup_kc:
