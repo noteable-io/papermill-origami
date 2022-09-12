@@ -135,7 +135,7 @@ class NoteableEngine(Engine):
                 papermill_nb=self.nb,
                 dagster_logger=dagster_logger,
             )
-            await self.papermill_execute_cells()
+            await self.papermill_execute_cells(dagster_logger)
             # info_msg = self.wait_for_reply(self.kc.kernel_info())
             # self.nb.metadata['language_info'] = info_msg['content']['language_info']
 
@@ -202,7 +202,7 @@ class NoteableEngine(Engine):
 
     sync_execute = run_sync(execute)
 
-    async def papermill_execute_cells(self):
+    async def papermill_execute_cells(self, dagster_logger):
         """This function replaces cell execution with its own wrapper.
 
         We are doing this for the following reasons:
@@ -221,7 +221,9 @@ class NoteableEngine(Engine):
         for index, cell in enumerate(self.nb.cells):
             try:
                 self.nb_man.cell_start(cell, index)
+                dagster_logger.info(f"Started cell {cell.id}")
                 await self.async_execute_cell(cell, index)
+                dagster_logger.info(f"Executed cell {cell.id}")
             except CellExecutionError as ex:
                 # TODO: Make sure we raise these
                 self.nb_man.cell_exception(self.nb.cells[index], cell_index=index, exception=ex)
