@@ -76,17 +76,23 @@ class NoteableEngine(Engine):
 
         # The original notebook id can either be the notebook file id or notebook version id
         original_notebook_id = kwargs["file_id"]
-        self.file = await self.client.get_notebook(kwargs["file_id"])
-        job_instance_attempt = None
 
+        job_instance_attempt = None
         if job_metadata := kwargs.get("job_metadata", {}):
+            version = await self.client.get_version_or_none(original_notebook_id)
+            if version is not None:
+                space_id = version.space_id
+            else:
+                file = await self.client.get_notebook(original_notebook_id)
+                space_id = file.space_id
+
             # 1: Ensure the job definition&instance references exists
             job_instance = await self.client.create_job_instance(
                 CustomerJobInstanceReferenceInput(
                     orchestrator_job_instance_id=job_metadata.get('job_instance_id'),
                     orchestrator_job_instance_uri=job_metadata.get('job_instance_uri'),
                     customer_job_definition_reference=CustomerJobDefinitionReferenceInput(
-                        space_id=self.file.space_id,
+                        space_id=space_id,
                         orchestrator_id=job_metadata.get('orchestrator_id'),
                         orchestrator_name=job_metadata.get('orchestrator_name'),
                         orchestrator_uri=job_metadata.get('orchestrator_uri'),
@@ -115,8 +121,6 @@ class NoteableEngine(Engine):
         #       of the newly created parameterized notebook.
         # from asyncio import sleep
         # await sleep(1)
-        # TODO: Until execute requests are fixed on parameterized notebooks, we will use the original
-        #       notebook for execution.
 
         async with self.setup_kernel(file=self.file, client=self.client, **kwargs):
             noteable_nb = nbformat.reads(
