@@ -183,7 +183,8 @@ class NoteableEngine(Engine):
             dagster_logger.info(f"Created kernel manager for {self.kernel_name}")
 
         # Subscribe to the file or we won't see status updates
-        await self.client.subscribe_file(self.km.file)
+        dagster_logger.info(f"Subscribing to file from_version_id={self.file.current_version_id}")
+        await self.client.subscribe_file(self.km.file, from_version_id=self.file.current_version_id)
         dagster_logger.info("Subscribed to file")
 
         await self.km.async_start_kernel(**kwargs)
