@@ -2,6 +2,7 @@
 
 It enables papermill to run notebooks against Noteable as though it were executing a notebook locally.
 """
+import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
@@ -117,10 +118,9 @@ class NoteableEngine(Engine):
         dagster_logger.info(
             f"Parameterized notebook available at https://{self.client.config.domain}/f/{self.file.id}"
         )
-        # TODO: We need this delay in order to successfully subscribe to the files channel
+        # HACK: We need this delay in order to successfully subscribe to the files channel
         #       of the newly created parameterized notebook.
-        # from asyncio import sleep
-        # await sleep(1)
+        await asyncio.sleep(1)
 
         async with self.setup_kernel(file=self.file, client=self.client, **kwargs):
             noteable_nb = nbformat.reads(
@@ -135,7 +135,7 @@ class NoteableEngine(Engine):
                 papermill_nb=self.nb,
                 dagster_logger=dagster_logger,
             )
-            await self.papermill_execute_cells(dagster_logger)
+            await self.papermill_execute_cells()
             # info_msg = self.wait_for_reply(self.kc.kernel_info())
             # self.nb.metadata['language_info'] = info_msg['content']['language_info']
 
@@ -180,10 +180,8 @@ class NoteableEngine(Engine):
         if self.km is None:
             # Assumes that file and client are being passed in
             self.km = self.create_kernel_manager(**kwargs)
-            dagster_logger.info(f"Created kernel manager for {self.kernel_name}")
 
         # Subscribe to the file or we won't see status updates
-        dagster_logger.info(f"Subscribing to file from_version_id={self.file.current_version_id}")
         await self.client.subscribe_file(self.km.file, from_version_id=self.file.current_version_id)
         dagster_logger.info("Subscribed to file")
 
@@ -203,7 +201,7 @@ class NoteableEngine(Engine):
 
     sync_execute = run_sync(execute)
 
-    async def papermill_execute_cells(self, dagster_logger):
+    async def papermill_execute_cells(self):
         """This function replaces cell execution with its own wrapper.
 
         We are doing this for the following reasons:
@@ -222,9 +220,7 @@ class NoteableEngine(Engine):
         for index, cell in enumerate(self.nb.cells):
             try:
                 self.nb_man.cell_start(cell, index)
-                dagster_logger.info(f"Started cell {cell.id}")
                 await self.async_execute_cell(cell, index)
-                dagster_logger.info(f"Executed cell {cell.id}")
             except CellExecutionError as ex:
                 # TODO: Make sure we raise these
                 self.nb_man.cell_exception(self.nb.cells[index], cell_index=index, exception=ex)
