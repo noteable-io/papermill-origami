@@ -285,6 +285,8 @@ class NoteableEngine(Engine):
                 raise SkipCallback("Nothing to do")
 
             for output in resp.data.outputs:
+                # We need to map parent_collection_id to cell_id in order to process any append_output_events
+                # which are uniquely identified by collection_id and not cell_id
                 self.__noteable_output_collection_cache[output.parent_collection_id] = cell.id
                 if output.type == KernelOutputType.error:
                     if output.content.raw:
