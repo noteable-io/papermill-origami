@@ -8,16 +8,22 @@ from contextlib import asynccontextmanager
 from typing import Generator, Optional
 
 import nbformat
+import orjson
 from jupyter_client.utils import run_sync
 from nbclient.exceptions import CellExecutionError
 from nbformat import NotebookNode
-from origami.client import NoteableClient
+from origami.client import NoteableClient, SkipCallback
 from origami.types.files import NotebookFile
 from origami.types.jobs import (
     CustomerJobDefinitionReferenceInput,
     CustomerJobInstanceReferenceInput,
     JobInstanceAttempt,
     JobInstanceAttemptStatus,
+)
+from origami.types.rtu import (
+    AppendOutputEventSchema,
+    KernelOutputType,
+    UpdateOutputCollectionEventSchema,
 )
 from papermill.engines import Engine, NotebookExecutionManager
 
@@ -68,6 +74,7 @@ class NoteableEngine(Engine):
         self.stderr_file = stderr_file
         self.kernel_name = kw.get('kernel_name', '__NOT_SET__')
         self.nb = nb_man.nb
+        self.__noteable_output_collection_cache = {}
         self.file = None
 
     async def execute(self, **kwargs):
@@ -264,6 +271,65 @@ class NoteableEngine(Engine):
         #     or "raises-exception" in cell.metadata.get("tags", []))
 
         # By default this will wait until the cell execution status is no longer active
+
+        async def update_outputs_callback(resp: UpdateOutputCollectionEventSchema):
+            """Callback to set cell outputs observed from Noteable over RTU into the
+            corresponding cell outputs here in Papermill
+
+            TODO: This callback currently only sets error outputs. We will need to extend it to set all types of outputs
+                  with a translation layer from Noteable to Jupyter.
+            """
+            if resp.data.cell_id != cell.id:
+                raise SkipCallback("Not tracked cell")
+            if not resp.data.outputs:
+                raise SkipCallback("Nothing to do")
+
+            for output in resp.data.outputs:
+                self.__noteable_output_collection_cache[output.parent_collection_id] = cell.id
+                if output.type == KernelOutputType.error:
+                    if output.content.raw:
+                        error_data = orjson.loads(output.content.raw)
+                        error_output = nbformat.v4.new_output("error", **error_data)
+                        self.nb.cells[cell_index].outputs.append(error_output)
+                        return True
+            return False
+
+        async def append_outputs_callback(resp: AppendOutputEventSchema):
+            """
+            Callback to append cell outputs observed from Noteable over RTU into the
+            corresponding cell outputs here in Papermill
+
+            TODO: This callback currently only sets error outputs. We will need to extend it to set all types of outputs
+                  with a translation layer from Noteable to Jupyter.
+            """
+            output = resp.data
+            cell_id = self.__noteable_output_collection_cache.get(output.parent_collection_id)
+
+            if cell_id != cell.id:
+                raise SkipCallback("Not tracked cell")
+
+            if output.type == KernelOutputType.error:
+                output = nbformat.v4.new_output("error", **orjson.loads(output.content.raw))
+                self.nb.cells[cell_index].outputs.append(output)
+                return True
+            return False
+
+        self.km.client.register_message_callback(
+            update_outputs_callback,
+            self.km.client.files_channel(file_id=self.km.file.id),
+            "update_output_collection_event",
+            response_schema=UpdateOutputCollectionEventSchema,
+            once=False,
+        )
+
+        self.km.client.register_message_callback(
+            append_outputs_callback,
+            self.km.client.files_channel(file_id=self.km.file.id),
+            "append_output_event",
+            response_schema=AppendOutputEventSchema,
+            once=False,
+        )
+
         result = await self.km.client.execute(self.km.file, cell.id)
         # TODO: This wasn't behaving correctly with the timeout?!
         # result = await asyncio.wait_for(self.km.client.execute(self.km.file, cell.id), self._get_timeout(cell))
