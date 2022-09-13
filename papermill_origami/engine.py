@@ -2,6 +2,7 @@
 
 It enables papermill to run notebooks against Noteable as though it were executing a notebook locally.
 """
+import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager
@@ -72,19 +73,27 @@ class NoteableEngine(Engine):
 
     async def execute(self, **kwargs):
         """Executes a notebook using Noteable's APIs"""
+        dagster_logger = kwargs["logger"]
+
         # The original notebook id can either be the notebook file id or notebook version id
         original_notebook_id = kwargs["file_id"]
-        self.file = await self.client.get_notebook(kwargs["file_id"])
-        job_instance_attempt = None
 
+        job_instance_attempt = None
         if job_metadata := kwargs.get("job_metadata", {}):
+            version = await self.client.get_version_or_none(original_notebook_id)
+            if version is not None:
+                space_id = version.space_id
+            else:
+                file = await self.client.get_notebook(original_notebook_id)
+                space_id = file.space_id
+
             # 1: Ensure the job definition&instance references exists
             job_instance = await self.client.create_job_instance(
                 CustomerJobInstanceReferenceInput(
                     orchestrator_job_instance_id=job_metadata.get('job_instance_id'),
                     orchestrator_job_instance_uri=job_metadata.get('job_instance_uri'),
                     customer_job_definition_reference=CustomerJobDefinitionReferenceInput(
-                        space_id=self.file.space_id,
+                        space_id=space_id,
                         orchestrator_id=job_metadata.get('orchestrator_id'),
                         orchestrator_name=job_metadata.get('orchestrator_name'),
                         orchestrator_uri=job_metadata.get('orchestrator_uri'),
@@ -103,16 +112,15 @@ class NoteableEngine(Engine):
             )
 
         # Create the parameterized_notebook
-        _file = await self.client.create_parameterized_notebook(
+        self.file = await self.client.create_parameterized_notebook(
             original_notebook_id, job_instance_attempt=job_instance_attempt
         )
-        print(f"Created parameterized notebook with file id {_file.id}")
-        # TODO: We need this delay in order to successfully subscribe to the files channel
+        dagster_logger.info(
+            f"Parameterized notebook available at https://{self.client.config.domain}/f/{self.file.id}"
+        )
+        # HACK: We need this delay in order to successfully subscribe to the files channel
         #       of the newly created parameterized notebook.
-        # from asyncio import sleep
-        # await sleep(1)
-        # TODO: Until execute requests are fixed on parameterized notebooks, we will use the original
-        #       notebook for execution.
+        await asyncio.sleep(1)
 
         async with self.setup_kernel(file=self.file, client=self.client, **kwargs):
             noteable_nb = nbformat.reads(
@@ -122,7 +130,10 @@ class NoteableEngine(Engine):
                 as_version=4,
             )
             await self.sync_noteable_nb_with_papermill(
-                file=self.file, noteable_nb=noteable_nb, papermill_nb=self.nb
+                file=self.file,
+                noteable_nb=noteable_nb,
+                papermill_nb=self.nb,
+                dagster_logger=dagster_logger,
             )
             await self.papermill_execute_cells()
             # info_msg = self.wait_for_reply(self.kc.kernel_info())
@@ -130,7 +141,9 @@ class NoteableEngine(Engine):
 
         return self.nb
 
-    async def sync_noteable_nb_with_papermill(self, file: NotebookFile, noteable_nb, papermill_nb):
+    async def sync_noteable_nb_with_papermill(
+        self, file: NotebookFile, noteable_nb, papermill_nb, dagster_logger
+    ):
         """Used to sync the cells of in-memory notebook representation that papermill manages with the Noteable notebook
 
         Papermill injects a new parameters cell with tag `injected-parameters` after a cell tagged `parameters`.
@@ -149,6 +162,11 @@ class NoteableEngine(Engine):
             after_id = papermill_nb_cell_ids[idx - 1] if idx > 0 else None
             await self.km.client.add_cell(file, cell=papermill_nb.cells[idx], after_id=after_id)
 
+        dagster_logger.info(
+            "Synced notebook with Noteable, "
+            f"added {len(added_cell_ids)} cells and deleted {len(deleted_cell_ids)} cells"
+        )
+
     @staticmethod
     def create_kernel_manager(file: NotebookFile, client: NoteableClient, **kwargs):
         """Helper that generates a kernel manager object from kwargs"""
@@ -157,13 +175,19 @@ class NoteableEngine(Engine):
     @asynccontextmanager
     async def setup_kernel(self, cleanup_kc=True, cleanup_kc_on_error=False, **kwargs) -> Generator:
         """Context manager for setting up the kernel to execute a notebook."""
+        dagster_logger = kwargs["logger"]
+
         if self.km is None:
             # Assumes that file and client are being passed in
             self.km = self.create_kernel_manager(**kwargs)
 
         # Subscribe to the file or we won't see status updates
-        await self.client.subscribe_file(self.km.file)
+        await self.client.subscribe_file(self.km.file, from_version_id=self.file.current_version_id)
+        dagster_logger.info("Subscribed to file")
+
         await self.km.async_start_kernel(**kwargs)
+        dagster_logger.info("Started kernel")
+
         try:
             yield
             # if cleanup_kc:
