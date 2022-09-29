@@ -41,7 +41,7 @@ Get your access token from https://app.noteable.world/api/token
 import papermill as pm
 from papermill_origami import NoteableClient, ClientConfig
 
-domain = 'app.noteable.world'
+domain = 'app.noteable.io'
 token = 'ey...'
 file_id = '...'
 
