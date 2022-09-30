@@ -5,6 +5,7 @@ It enables papermill to run notebooks against Noteable as though it were executi
 import asyncio
 import json
 import logging
+import functools
 from contextlib import asynccontextmanager
 from typing import Generator, Optional
 
@@ -33,6 +34,22 @@ from .manager import NoteableKernelManager
 logger = logging.getLogger(__name__)
 
 
+def ensure_client(func):
+    @functools.wraps(func)
+    async def client_context_wrapper(obj, *args, **kwargs):
+        if obj.client is None:
+            # Assume env variables supply config arguments
+            async with NoteableClient() as client:
+                try:
+                    obj.client = client
+                    return await func(obj, *args, **kwargs)
+                finally:
+                    obj.client = None
+        else:
+            return await func(obj, *args, **kwargs)
+    return client_context_wrapper
+
+
 class NoteableEngine(Engine):
     """The subclass that can be registered with papermill to handle notebook executions."""
 
@@ -46,7 +63,7 @@ class NoteableEngine(Engine):
     def __init__(
         self,
         nb_man: NotebookExecutionManager,
-        client: NoteableClient,
+        client: Optional[NoteableClient] = None,
         km: Optional[NoteableKernelManager] = None,
         timeout_func=None,
         timeout: float = None,
@@ -78,6 +95,7 @@ class NoteableEngine(Engine):
         self.__noteable_output_collection_cache = {}
         self.file = None
 
+    @ensure_client
     async def execute(self, **kwargs):
         """Executes a notebook using Noteable's APIs"""
         dagster_logger = kwargs["logger"]
@@ -136,6 +154,10 @@ class NoteableEngine(Engine):
                 else json.dumps(self.file.content),
                 as_version=4,
             )
+            print('-----------')
+            print(self.nb_man.nb)
+            print(self.nb)
+            print(self.nb.cells)
             await self.sync_noteable_nb_with_papermill(
                 file=self.file,
                 noteable_nb=noteable_nb,
@@ -148,6 +170,7 @@ class NoteableEngine(Engine):
 
         return self.nb
 
+    @ensure_client
     async def sync_noteable_nb_with_papermill(
         self, file: NotebookFile, noteable_nb, papermill_nb, dagster_logger
     ):
@@ -208,6 +231,7 @@ class NoteableEngine(Engine):
 
     sync_execute = run_sync(execute)
 
+    @ensure_client
     async def papermill_execute_cells(self):
         """This function replaces cell execution with its own wrapper.
 
