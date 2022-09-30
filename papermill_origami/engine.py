@@ -30,6 +30,7 @@ from origami.types.rtu import (
 from papermill.engines import Engine, NotebookExecutionManager
 
 from .manager import NoteableKernelManager
+from .util import removeprefix
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,16 @@ class NoteableEngine(Engine):
         dagster_logger = kwargs["logger"]
 
         # The original notebook id can either be the notebook file id or notebook version id
-        original_notebook_id = kwargs["file_id"]
+        original_notebook_id = kwargs.get("file_id")
+        if original_notebook_id is None:
+            maybe_file = kwargs.get("file")
+            maybe_input_path = kwargs.get("input_path")
+            if maybe_file:
+                original_notebook_id = maybe_file.id
+            elif maybe_input_path and "noteable://" in maybe_input_path:
+                original_notebook_id = removeprefix(maybe_input_path, "noteable://")
+            else:
+                raise ValueError("No file_id or derivable file_id found for noteable scheme")
 
         job_instance_attempt = None
         if job_metadata := kwargs.get("job_metadata", {}):
@@ -377,7 +387,6 @@ class NoteableEngine(Engine):
             once=False,
         )
 
-        print(self.km.client)
         result = await self.km.client.execute(self.km.file, cell.id)
         # TODO: This wasn't behaving correctly with the timeout?!
         # result = await asyncio.wait_for(self.km.client.execute(self.km.file, cell.id), self._get_timeout(cell))

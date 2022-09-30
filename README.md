@@ -75,8 +75,6 @@ pm.execute_notebook(
     None, # Set no particular output notebook, but a log of the resulting exeuction link still prints
     # This turns on the Noteable API interface
     engine_name='noteable', # exclude this kwarg to run the Notebook locally
-    # Noteable-specific kwargs
-    file_id=file_id,
 )
 ```
 
