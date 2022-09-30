@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.0.5] - 2022-09-13
 ### Added
 - Add callbacks to set kernel error outputs from Noteable into papermill
+- Adds ability for papermill engine to automatically generate a NoteableClient
+- Improved readme instructions
 
 ## [0.0.4] - 2022-09-09
 ### Fixed

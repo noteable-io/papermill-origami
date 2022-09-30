@@ -154,10 +154,6 @@ class NoteableEngine(Engine):
                 else json.dumps(self.file.content),
                 as_version=4,
             )
-            print('-----------')
-            print(self.nb_man.nb)
-            print(self.nb)
-            print(self.nb.cells)
             await self.sync_noteable_nb_with_papermill(
                 file=self.file,
                 noteable_nb=noteable_nb,
@@ -380,11 +376,10 @@ class NoteableEngine(Engine):
             once=False,
         )
 
+        print(self.km.client)
         result = await self.km.client.execute(self.km.file, cell.id)
         # TODO: This wasn't behaving correctly with the timeout?!
         # result = await asyncio.wait_for(self.km.client.execute(self.km.file, cell.id), self._get_timeout(cell))
-        logger.error(result.data.state)
-        logger.error(result.data.state.is_error_state)
         if result.data.state.is_error_state:
             # TODO: Add error info from stacktrace output messages
             raise CellExecutionError("", str(result.data.state), "Cell execution failed")
