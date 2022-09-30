@@ -3,8 +3,9 @@ import logging
 from unittest.mock import ANY
 
 import nbformat
-from papermill_origami.engine import NoteableEngine
 from origami.types.files import NotebookFile
+
+from papermill_origami.engine import NoteableEngine
 
 
 async def test_sync_noteable_nb_with_papermill(file, file_content, mocker, noteable_engine):
@@ -33,8 +34,12 @@ async def test_sync_noteable_nb_with_papermill(file, file_content, mocker, notea
 
 
 async def test_default_client(mocker, file, file_content):
-    mock_noteable_client = mocker.patch('papermill_origami.engine.NoteableClient', return_value=mocker.AsyncMock())
-    mock_noteable_client.return_value.__aenter__.return_value.create_parameterized_notebook.return_value = file
+    mock_noteable_client = mocker.patch(
+        'papermill_origami.engine.NoteableClient', return_value=mocker.AsyncMock()
+    )
+    mock_noteable_client.return_value.__aenter__.return_value.create_parameterized_notebook.return_value = (
+        file
+    )
     mock_nb_man = mocker.MagicMock()
     mock_nb_man.nb = copy.deepcopy(file_content)
     engine = NoteableEngine(nb_man=mock_nb_man, km=mocker.AsyncMock(), client=None)

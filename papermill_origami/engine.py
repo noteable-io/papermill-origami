@@ -3,9 +3,9 @@
 It enables papermill to run notebooks against Noteable as though it were executing a notebook locally.
 """
 import asyncio
+import functools
 import json
 import logging
-import functools
 from contextlib import asynccontextmanager
 from typing import Generator, Optional
 
@@ -47,6 +47,7 @@ def ensure_client(func):
                     obj.client = None
         else:
             return await func(obj, *args, **kwargs)
+
     return client_context_wrapper
 
 
