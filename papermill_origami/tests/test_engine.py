@@ -3,6 +3,9 @@ import logging
 from unittest.mock import ANY
 
 import nbformat
+from origami.types.files import NotebookFile
+
+from papermill_origami.engine import NoteableEngine
 
 
 async def test_sync_noteable_nb_with_papermill(file, file_content, mocker, noteable_engine):
@@ -28,3 +31,24 @@ async def test_sync_noteable_nb_with_papermill(file, file_content, mocker, notea
 
     mock_noteable_client.delete_cell.assert_called_with(ANY, deleted_cell['id'])
     mock_noteable_client.add_cell.assert_called_with(ANY, cell=added_cell, after_id=after_id)
+
+
+async def test_default_client(mocker, file, file_content):
+    mock_noteable_client = mocker.patch(
+        'papermill_origami.engine.NoteableClient', return_value=mocker.AsyncMock()
+    )
+    mock_noteable_client.return_value.__aenter__.return_value.create_parameterized_notebook.return_value = (
+        file
+    )
+    mock_nb_man = mocker.MagicMock()
+    mock_nb_man.nb = copy.deepcopy(file_content)
+    engine = NoteableEngine(nb_man=mock_nb_man, km=mocker.AsyncMock(), client=None)
+
+    # Ensure this doesn't explode with no client
+    await engine.execute(
+        file_id='fake_id',
+        noteable_nb=file_content,
+        logger=logging.getLogger(__name__),
+    )
+    # Check that we sent an execute request to the client
+    engine.km.client.execute.assert_called_once()

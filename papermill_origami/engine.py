@@ -3,6 +3,7 @@
 It enables papermill to run notebooks against Noteable as though it were executing a notebook locally.
 """
 import asyncio
+import functools
 import json
 import logging
 from contextlib import asynccontextmanager
@@ -29,8 +30,26 @@ from origami.types.rtu import (
 from papermill.engines import Engine, NotebookExecutionManager
 
 from .manager import NoteableKernelManager
+from .util import removeprefix
 
 logger = logging.getLogger(__name__)
+
+
+def ensure_client(func):
+    @functools.wraps(func)
+    async def client_context_wrapper(obj, *args, **kwargs):
+        if obj.client is None:
+            # Assume env variables supply config arguments
+            async with NoteableClient() as client:
+                try:
+                    obj.client = client
+                    return await func(obj, *args, **kwargs)
+                finally:
+                    obj.client = None
+        else:
+            return await func(obj, *args, **kwargs)
+
+    return client_context_wrapper
 
 
 class NoteableEngine(Engine):
@@ -46,7 +65,7 @@ class NoteableEngine(Engine):
     def __init__(
         self,
         nb_man: NotebookExecutionManager,
-        client: NoteableClient,
+        client: Optional[NoteableClient] = None,
         km: Optional[NoteableKernelManager] = None,
         timeout_func=None,
         timeout: float = None,
@@ -78,12 +97,22 @@ class NoteableEngine(Engine):
         self.__noteable_output_collection_cache = {}
         self.file = None
 
+    @ensure_client
     async def execute(self, **kwargs):
         """Executes a notebook using Noteable's APIs"""
         dagster_logger = kwargs["logger"]
 
         # The original notebook id can either be the notebook file id or notebook version id
-        original_notebook_id = kwargs["file_id"]
+        original_notebook_id = kwargs.get("file_id")
+        if original_notebook_id is None:
+            maybe_file = kwargs.get("file")
+            maybe_input_path = kwargs.get("input_path")
+            if maybe_file:
+                original_notebook_id = maybe_file.id
+            elif maybe_input_path and "noteable://" in maybe_input_path:
+                original_notebook_id = removeprefix(maybe_input_path, "noteable://")
+            else:
+                raise ValueError("No file_id or derivable file_id found for noteable scheme")
 
         job_instance_attempt = None
         if job_metadata := kwargs.get("job_metadata", {}):
@@ -148,6 +177,7 @@ class NoteableEngine(Engine):
 
         return self.nb
 
+    @ensure_client
     async def sync_noteable_nb_with_papermill(
         self, file: NotebookFile, noteable_nb, papermill_nb, dagster_logger
     ):
@@ -208,6 +238,7 @@ class NoteableEngine(Engine):
 
     sync_execute = run_sync(execute)
 
+    @ensure_client
     async def papermill_execute_cells(self):
         """This function replaces cell execution with its own wrapper.
 
@@ -359,8 +390,6 @@ class NoteableEngine(Engine):
         result = await self.km.client.execute(self.km.file, cell.id)
         # TODO: This wasn't behaving correctly with the timeout?!
         # result = await asyncio.wait_for(self.km.client.execute(self.km.file, cell.id), self._get_timeout(cell))
-        logger.error(result.data.state)
-        logger.error(result.data.state.is_error_state)
         if result.data.state.is_error_state:
             # TODO: Add error info from stacktrace output messages
             raise CellExecutionError("", str(result.data.state), "Cell execution failed")

@@ -35,14 +35,61 @@ pip install papermill-origami
 
 ## Getting Started
 
-Get your access token from https://app.noteable.world/api/token
+### API Token
+
+Get your access token from your User Settings -> API Tokens
+
+or alternatively you can generate a post request to generate a new token
+
+```
+curl -X 'POST' \
+  'https://app.noteable.io/gate/api/v1/tokens' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "ttl": 31536000,
+  "name": "my_token"
+}'
+```
+
+### Engine Registration
+
+The `noteable` engine keyword will use the following environment variables by default:
+
+```bash
+NOTEABLE_DOMAIN = app.noteable.io
+NOTEABLE_TOKEN = MY_TOKEN_VALUE_HERE
+```
+
+Then the engine is enabled by running papermill as normal. But now you have access to
+the `noteable://` scheme as well as the ability to tell papermill to use Noteable as
+the execution location for your notebook.
+
+```python
+import papermill as pm
+
+file_id = '...'
+
+pm.execute_notebook(
+    f'noteable://{file_id}',
+    None, # Set no particular output notebook, but a log of the resulting exeuction link still prints
+    # This turns on the Noteable API interface
+    engine_name='noteable', # exclude this kwarg to run the Notebook locally
+)
+```
+
+#### Advanced Setup
+
+For more advanced control or reuse of a NoteableClient SDK object you can use
+the async await pattern around a client constructor. This reuses the connection
+throughout the life cycle of the context block.
 
 ```python
 import papermill as pm
 from papermill_origami import NoteableClient, ClientConfig
 
-domain = 'app.noteable.world'
-token = 'ey...'
+domain = 'app.noteable.io'
+token = MY_TOKEN_VALUE_HERE
 file_id = '...'
 
 async with NoteableClient(token, config=ClientConfig(domain=domain)) as client:
@@ -50,7 +97,7 @@ async with NoteableClient(token, config=ClientConfig(domain=domain)) as client:
     pm.execute_notebook(
         f'noteable://{file_id}',
         None,
-        engine_name='noteable', # exclude this kwarg to run the Notebook locally
+        engine_name='noteable',
         # Noteable-specific kwargs
         file=file,
         client=client,
