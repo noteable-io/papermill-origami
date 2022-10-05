@@ -6,7 +6,6 @@ import httpx
 from jupyter_client.utils import run_sync
 from origami.client import NoteableClient
 from origami.types.files import FileVersion
-from papermill.exceptions import PapermillException
 
 
 def _ensure_client(func):
@@ -54,10 +53,18 @@ class NoteableHandler:
 
     def listdir(self, path):
         """Lists available files in a given path relative to the file's project"""
+        from papermill.exceptions import (
+            PapermillException,
+        )  # avoid circular imports due to papermill handler registration
+
         raise PapermillException('listdir is not supported by NoteableHandler yet')
 
     def write(self, buf, path):
         """Writes a notebook file back to Noteable"""
+        from papermill.exceptions import (
+            PapermillException,
+        )  # avoid circular imports due to papermill handler registration
+
         raise PapermillException('write is not supported by NoteableHandler yet')
 
     @classmethod
