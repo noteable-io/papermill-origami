@@ -5,7 +5,7 @@
 
 [tool.poetry]
 name = "papermill-origami"
-version = "0.0.1"
+version = "0.0.5"
 description = "The noteable API interface"
 authors = ["Matt Seal <matt@noteable.io>"]
 maintainers = ["Matt Seal <matt@noteable.io>"]
@@ -34,8 +34,10 @@ url = "https://pypi.org"
 
 [tool.poetry.dependencies]
 python = "^3.8"
-noteable-origami = "^0.0.2"
-papermill = {git = "https://github.com/rohitsanj/papermill.git", branch = "rohit/feature-ignore-kernel-name-with-custom-engine"}
+noteable-origami = "^0.0.5"
+papermill = "^2.4.0"
+dagstermill = {version = "^1.0.5", optional = true}
+cloudpickle = "^2.2.0"
 
 [tool.poetry.dev-dependencies]
 flake8-docstrings = "^1.6.0"
@@ -45,10 +47,18 @@ isort = "^5.10.1"
 boto = "^2.49.0"
 notebook = "^6.4.11"
 pytest = "^7.1.2"
-pytest-cov = "^3.0.0"
+pytest-cov = "^4.0.0"
 pytest-asyncio = "^0.19.0"
 nox = "^2022.1.7"
 nox-poetry = "^1.0.0"
+pytest-mock = "^3.8.2"
+bump2version = "^1.0.1"
+
+[tool.poetry.extras]
+dagster = ["dagstermill"]
+
+[tool.poetry.plugins."papermill.engine"]
+noteable = "papermill_origami.engine:NoteableEngine"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

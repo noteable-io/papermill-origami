@@ -28,7 +28,7 @@ class NoteableKernelManager(KernelManagerABC):
     ):
         """Sets up basic trackers for the Manager"""
         self.open_context = False
-        self.client = client
+        self.client: NoteableClient = client
         self.file = file
 
     async def __aenter__(self):
