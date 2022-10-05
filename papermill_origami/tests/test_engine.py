@@ -31,7 +31,8 @@ async def test_sync_noteable_nb_with_papermill(file, file_content, mocker, notea
 
 
 async def test_default_client(mocker, file, file_content):
-    from papermill_origami.engine import NoteableEngine # avoid circular import
+    from papermill_origami.engine import NoteableEngine  # avoid circular import
+
     mock_noteable_client = mocker.patch(
         'papermill_origami.engine.NoteableClient', return_value=mocker.AsyncMock()
     )
@@ -49,4 +50,6 @@ async def test_default_client(mocker, file, file_content):
         logger=logging.getLogger(__name__),
     )
     # Check that we sent an execute request to the client
-    engine.km.client.execute.assert_has_calls([mocker.call(ANY, cell.id) for cell in file_content.cells], any_order=True)
+    engine.km.client.execute.assert_has_calls(
+        [mocker.call(ANY, cell.id) for cell in file_content.cells], any_order=True
+    )
