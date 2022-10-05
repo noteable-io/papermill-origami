@@ -87,7 +87,9 @@ the `noteable-origami` package.
 
 ```python
 import papermill as pm
-from origami.client import NoteableClient, ClientConfig
+from papermill.iorw import papermill_io
+from papermill_origami import ClientConfig, NoteableClient, NoteableHandler 
+
 
 domain = 'app.noteable.io'
 token = MY_TOKEN_VALUE_HERE
@@ -95,6 +97,7 @@ file_id = '...'
 
 async with NoteableClient(token, config=ClientConfig(domain=domain)) as client:
     file = await client.get_notebook(file_id)
+    papermill_io.register("noteable://", NoteableHandler(client))
     pm.execute_notebook(
         f'noteable://{file_id}',
         None,

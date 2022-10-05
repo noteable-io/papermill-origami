@@ -58,7 +58,9 @@ class NoteableEngine(Engine):
     @classmethod
     def execute_managed_notebook(cls, nb_man, kernel_name=None, **kwargs):
         """The interface method used by papermill to initiate an execution request"""
-        return run_sync(cls(nb_man, **kwargs).execute)(kernel_name=kernel_name, **kwargs)
+        return run_sync(cls(nb_man, client=kwargs.pop("client", None), **kwargs).execute)(
+            kernel_name=kernel_name, **kwargs
+        )
 
     def __init__(
         self,
