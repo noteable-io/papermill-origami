@@ -18,9 +18,9 @@ def mock_noteable_client(mocker, file):
 
 @pytest.fixture
 def noteable_engine(mocker, file, file_content, mock_noteable_client):
-    from papermill_origami.engine import (
+    from papermill_origami.engine import (  # avoid circular import due to papermill engine registration
         NoteableEngine,
-    )  # avoid circular import due to papermill engine registration
+    )
 
     mock_nb_man = mocker.MagicMock()
     mock_nb_man.nb = copy.deepcopy(file_content)
