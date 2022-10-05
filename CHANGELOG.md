@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-
+## [0.0.6] - 2022-10-05
 ### Changed
 - `execute_notebook` need not be passed in a `logger` instance explicitly, it will use the module-level logger if one is not provided.
 - Skip executing empty code cells in `execute_notebook` to not get stuck waiting for the cell status update to come through
