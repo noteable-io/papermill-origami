@@ -27,11 +27,10 @@ from dagstermill import _load_input_parameter, _reconstitute_pipeline_context
 from dagstermill.compat import ExecutionError
 from dagstermill.factory import _find_first_tagged_cell_index, get_papermill_parameters
 from jupyter_client.utils import run_sync
-from origami.client import ClientConfig
+from origami.client import ClientConfig, NoteableClient
 from papermill.iorw import load_notebook_node, write_ipynb
 from papermill.translators import PythonTranslator
 
-from ..client import NoteableClient
 from ..util import removeprefix
 from .context import SerializableExecutionContext
 
