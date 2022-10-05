@@ -28,9 +28,10 @@ from dagstermill.compat import ExecutionError
 from dagstermill.factory import _find_first_tagged_cell_index, get_papermill_parameters
 from jupyter_client.utils import run_sync
 from origami.client import ClientConfig, NoteableClient
-from papermill.iorw import load_notebook_node, write_ipynb
+from papermill.iorw import load_notebook_node, papermill_io, write_ipynb
 from papermill.translators import PythonTranslator
 
+from ..iorw import NoteableHandler
 from ..util import removeprefix
 from .context import SerializableExecutionContext
 
@@ -72,6 +73,11 @@ def _dm_compute(
                 # noteable specific client
                 noteable_client = NoteableClient(config=ClientConfig())
                 # needs to be done before `load_notebook_node`
+
+                # We need to explicitly register the `NoteableHandler` with the client here,
+                # otherwise, `NoteableHandler.read` will try to create a new `NoteableClient`
+                # which will conflict with the one we have here.
+                papermill_io.register("noteable://", NoteableHandler(noteable_client))
                 run_sync(noteable_client.__aenter__)()
 
                 # Scaffold the registration here
