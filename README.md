@@ -82,8 +82,7 @@ pm.execute_notebook(
 
 For more advanced control or reuse of a NoteableClient SDK object you can use
 the async await pattern around a client constructor. This reuses the connection
-throughout the life cycle of the context block. This uses `NoteableClient` from 
-the `noteable-origami` package.
+throughout the life cycle of the context block.
 
 ```python
 import papermill as pm
