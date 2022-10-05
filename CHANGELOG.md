@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Skip executing empty code cells in `execute_notebook` to not get stuck waiting for the cell status update to come through
 - Check `result.state.is_error_state` instead of `result.data.state.is_error_state` in `execute_notebook` due to corresponding changes in `noteable-origami`
 - Ensure that `NoteableHandler` always has a `NoteableClient` instance defined when `NoteableHandler.read` is called
+- Register `NoteableHandler` with scheme `noteable://` as entrypoint in `pyproject.toml`
 
 ## [0.0.5] - 2022-09-13
 ### Added
