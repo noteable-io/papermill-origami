@@ -1,5 +1,3 @@
-from origami.client import ClientConfig
+from origami.client import ClientConfig, NoteableClient  # noqa
 
-from .client import NoteableClient
-from .engine import NoteableEngine
-from .iorw import NoteableHandler
+from papermill_origami.iorw import NoteableHandler

@@ -6,8 +6,6 @@ import pytest
 from origami.types.access_levels import Visibility
 from origami.types.files import FileType, NotebookFile
 
-from papermill_origami import NoteableEngine
-
 
 @pytest.fixture
 def file_content():
@@ -32,10 +30,3 @@ def file(file_content):
         file_store_path=f"{project_id}/folder/hello world.ipynb",
         content=file_content,
     )
-
-
-@pytest.fixture
-def noteable_engine(mocker, file):
-    mock_noteable_client = mocker.AsyncMock()
-    mock_noteable_client.get_notebook.return_value = file
-    return NoteableEngine(nb_man=mocker.Mock(), km=mocker.Mock(), client=mock_noteable_client)

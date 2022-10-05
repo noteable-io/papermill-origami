@@ -58,7 +58,7 @@ class NoteableEngine(Engine):
     @classmethod
     def execute_managed_notebook(cls, nb_man, kernel_name=None, **kwargs):
         """The interface method used by papermill to initiate an execution request"""
-        return run_sync(cls(nb_man, client=kwargs.pop('client'), **kwargs).execute)(
+        return run_sync(cls(nb_man, client=kwargs.pop('client', None), **kwargs).execute)(
             kernel_name=kernel_name, **kwargs
         )
 
@@ -100,6 +100,10 @@ class NoteableEngine(Engine):
     @ensure_client
     async def execute(self, **kwargs):
         """Executes a notebook using Noteable's APIs"""
+        # Use papermill-origami logger if one is not provided
+        if not kwargs.get("logger"):
+            kwargs["logger"] = logger
+
         dagster_logger = kwargs["logger"]
 
         # The original notebook id can either be the notebook file id or notebook version id
@@ -313,6 +317,9 @@ class NoteableEngine(Engine):
         if cell.cell_type != 'code':
             logger.debug("Skipping non-executing cell %s", cell_index)
             return cell
+        elif not cell.source.strip():
+            logger.debug("Skipping empty code cell %s", cell_index)
+            return cell
 
         logger.debug("Executing cell:\n%s", cell.id)
 
@@ -390,7 +397,7 @@ class NoteableEngine(Engine):
         result = await self.km.client.execute(self.km.file, cell.id)
         # TODO: This wasn't behaving correctly with the timeout?!
         # result = await asyncio.wait_for(self.km.client.execute(self.km.file, cell.id), self._get_timeout(cell))
-        if result.data.state.is_error_state:
+        if result.state.is_error_state:
             # TODO: Add error info from stacktrace output messages
             raise CellExecutionError("", str(result.data.state), "Cell execution failed")
         return cell

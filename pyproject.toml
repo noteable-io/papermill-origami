@@ -57,6 +57,9 @@ bump2version = "^1.0.1"
 [tool.poetry.extras]
 dagster = ["dagstermill"]
 
+[tool.poetry.plugins."papermill.io"]
+"noteable://" = "papermill_origami.iorw:NoteableHandler"
+
 [tool.poetry.plugins."papermill.engine"]
 noteable = "papermill_origami.engine:NoteableEngine"
 

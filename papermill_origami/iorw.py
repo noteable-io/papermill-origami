@@ -1,12 +1,28 @@
 """The iorw module provides the handlers for registration with papermill to read/write Notebooks"""
-
+import functools
 import json
 
 import httpx
 from jupyter_client.utils import run_sync
 from origami.client import NoteableClient
 from origami.types.files import FileVersion
-from papermill.exceptions import PapermillException
+
+
+def _ensure_client(func):
+    @functools.wraps(func)
+    def wrapper(obj, *args, **kwargs):
+        if isinstance(obj, NoteableHandler):
+            # If we're a handler, we can be sure that we have a client
+            return func(obj, *args, **kwargs)
+        else:
+            # If we're not a handler, we need to create a handler instance
+            # and then bind the function to it
+            with NoteableClient() as client:
+                instance = NoteableHandler(client)
+                bound_method = func.__get__(instance, instance.__class__)
+                return bound_method(obj, *args, **kwargs)
+
+    return wrapper
 
 
 class NoteableHandler:
@@ -18,6 +34,7 @@ class NoteableHandler:
         """Tracks the noteable client to be used with the handler"""
         self.client = client
 
+    @_ensure_client
     def read(self, path):
         """Reads a file from the noteable client by either version id or file id"""
         id = path.split('://')[-1]
@@ -36,13 +53,22 @@ class NoteableHandler:
 
     def listdir(self, path):
         """Lists available files in a given path relative to the file's project"""
+        from papermill.exceptions import (  # avoid circular imports due to papermill handler registration
+            PapermillException,
+        )
+
         raise PapermillException('listdir is not supported by NoteableHandler yet')
 
     def write(self, buf, path):
         """Writes a notebook file back to Noteable"""
+        from papermill.exceptions import (  # avoid circular imports due to papermill handler registration
+            PapermillException,
+        )
+
         raise PapermillException('write is not supported by NoteableHandler yet')
 
-    def pretty_path(self, path):
+    @classmethod
+    def pretty_path(cls, path):
         """Used for logging"""
         return path
 
