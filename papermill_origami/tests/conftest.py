@@ -30,12 +30,3 @@ def file(file_content):
         file_store_path=f"{project_id}/folder/hello world.ipynb",
         content=file_content,
     )
-
-
-@pytest.fixture
-def noteable_engine(mocker, file):
-    from papermill_origami.engine import NoteableEngine  # avoid circular import
-
-    mock_noteable_client = mocker.AsyncMock()
-    mock_noteable_client.get_notebook.return_value = file
-    return NoteableEngine(nb_man=mocker.Mock(), km=mocker.AsyncMock(), client=mock_noteable_client)

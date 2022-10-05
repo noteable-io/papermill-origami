@@ -395,10 +395,9 @@ class NoteableEngine(Engine):
         result = await self.km.client.execute(self.km.file, cell.id)
         # TODO: This wasn't behaving correctly with the timeout?!
         # result = await asyncio.wait_for(self.km.client.execute(self.km.file, cell.id), self._get_timeout(cell))
-        for cell_state in result.data.cell_states:
-            if cell_state.state.is_error_state:
-                # TODO: Add error info from stacktrace output messages
-                raise CellExecutionError("", str(cell_state.state), "Cell execution failed")
+        if result.state.is_error_state:
+            # TODO: Add error info from stacktrace output messages
+            raise CellExecutionError("", str(result.data.state), "Cell execution failed")
         return cell
 
     def log_output_message(self, output):
