@@ -144,6 +144,14 @@ serialized_context = b64decode(serialized_context_b64)
 
 context = cloudpickle.loads(serialized_context)
 {input_parameters}
+
+# Print out the applied parameter variable names and their types
+parameters = {base_parameters["__dm_input_names"]}
+parameter_types = [type(eval(parameter)).__name__ for parameter in parameters]
+
+import pandas
+from IPython.display import display, HTML
+display(HTML(pandas.DataFrame.from_dict({{"Dagster Applied Parameters": parameters, "Types": parameter_types}}).to_html(index=False)))
 """
 
                 nb_no_parameters = copy.deepcopy(nb)
