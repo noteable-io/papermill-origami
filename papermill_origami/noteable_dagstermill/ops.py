@@ -151,7 +151,13 @@ parameter_types = [type(eval(parameter)).__name__ for parameter in parameters]
 
 import pandas
 from IPython.display import display, HTML
-display(HTML(pandas.DataFrame.from_dict({{"Dagster Applied Parameters": parameters, "Types": parameter_types}}).to_html(index=False)))
+display(
+    HTML(
+        pandas.DataFrame.from_dict(
+            {{"Dagster Applied Parameters": parameters, "Types": parameter_types}}
+        ).to_html(index=False)
+    )
+)
 """
 
                 nb_no_parameters = copy.deepcopy(nb)
