@@ -149,6 +149,8 @@ context = cloudpickle.loads(serialized_context)
                 nb_no_parameters = copy.deepcopy(nb)
                 newcell = nbformat.v4.new_code_cell(source=template)
                 newcell.metadata["tags"] = ["injected-parameters"]
+                # Hide the injected parameters cell source by default
+                newcell.metadata.setdefault("jupyter", {})["source_hidden"] = True
 
                 param_cell_index = _find_first_tagged_cell_index(nb_no_parameters, "parameters")
                 injected_cell_index = _find_first_tagged_cell_index(
