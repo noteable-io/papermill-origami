@@ -399,7 +399,7 @@ class NoteableEngine(Engine):
         # result = await asyncio.wait_for(self.km.client.execute(self.km.file, cell.id), self._get_timeout(cell))
         if result.state.is_error_state:
             # TODO: Add error info from stacktrace output messages
-            raise CellExecutionError("", str(result.data.state), "Cell execution failed")
+            raise CellExecutionError("", str(result.state), "Cell execution failed")
         return cell
 
     def log_output_message(self, output):
