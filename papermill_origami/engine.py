@@ -30,7 +30,7 @@ from origami.types.rtu import (
 from papermill.engines import Engine, NotebookExecutionManager
 
 from .manager import NoteableKernelManager
-from .util import removeprefix
+from .util import flatten_dict, removeprefix
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +96,23 @@ class NoteableEngine(Engine):
         self.nb = nb_man.nb
         self.__noteable_output_collection_cache = {}
         self.file = None
+
+    def catch_cell_metadata_updates(self, func):
+        """A decorator for catching cell metadata updates and updating the Noteable notebook via RTU"""
+
+        @functools.wraps(func)
+        def wrapper(cell, *args, **kwargs):
+            ret_val = func(cell, *args, **kwargs)
+            # Update Noteable cell metadata
+            for key, value in flatten_dict(cell.metadata).items():
+                run_sync(self.km.client.update_cell_metadata)(
+                    file=self.file,
+                    cell_id=cell.id,
+                    metadata_update_properties={"path": key, "value": value},
+                )
+            return ret_val
+
+        return wrapper
 
     @ensure_client
     async def execute(self, **kwargs):
@@ -175,7 +192,20 @@ class NoteableEngine(Engine):
                 papermill_nb=self.nb,
                 dagster_logger=dagster_logger,
             )
+
+            # Sync metadata from papermill to noteable before execution
+            await self.sync_noteable_nb_metadata_with_papermill()
+
             await self.papermill_execute_cells()
+
+            # WARNING: This is a hack to ensure we have the client in session to send nb metadata
+            #          updates over RTU after execution.
+            self.nb_man.notebook_complete()
+            await self.sync_noteable_nb_metadata_with_papermill()
+
+            # Now override the notebook_complete method and set it to a no-op (since we already called it)
+            self.nb_man.notebook_complete = lambda: None
+
             # info_msg = self.wait_for_reply(self.kc.kernel_info())
             # self.nb.metadata['language_info'] = info_msg['content']['language_info']
 
@@ -207,6 +237,12 @@ class NoteableEngine(Engine):
             "Synced notebook with Noteable, "
             f"added {len(added_cell_ids)} cells and deleted {len(deleted_cell_ids)} cells"
         )
+
+    async def sync_noteable_nb_metadata_with_papermill(self):
+        """Used to sync the metadata of in-memory notebook representation that papermill manages with
+        the Noteable notebook"""
+        for key, value in flatten_dict(self.nb.metadata).items():
+            await self.km.client.update_nb_metadata(self.file, {"path": key, "value": value})
 
     @staticmethod
     def create_kernel_manager(file: NotebookFile, client: NoteableClient, **kwargs):
@@ -242,6 +278,19 @@ class NoteableEngine(Engine):
 
     sync_execute = run_sync(execute)
 
+    def _cell_start(self, cell, cell_index=None, **kwargs):
+        self.catch_cell_metadata_updates(self.nb_man.cell_start)(cell, cell_index, **kwargs)
+
+    def _cell_exception(self, cell, cell_index=None, **kwargs):
+        self.catch_cell_metadata_updates(self.nb_man.cell_exception)(cell, cell_index, **kwargs)
+        # Manually update the Noteable nb metadata
+        run_sync(self.km.client.update_nb_metadata)(
+            self.file, {"path": ["papermill", "exception"], "value": True}
+        )
+
+    def _cell_complete(self, cell, cell_index=None, **kwargs):
+        self.catch_cell_metadata_updates(self.nb_man.cell_complete)(cell, cell_index, **kwargs)
+
     @ensure_client
     async def papermill_execute_cells(self):
         """This function replaces cell execution with its own wrapper.
@@ -261,14 +310,14 @@ class NoteableEngine(Engine):
         # Execute each cell and update the output in real time.
         for index, cell in enumerate(self.nb.cells):
             try:
-                self.nb_man.cell_start(cell, index)
+                self._cell_start(cell, index)
                 await self.async_execute_cell(cell, index)
             except CellExecutionError as ex:
                 # TODO: Make sure we raise these
-                self.nb_man.cell_exception(self.nb.cells[index], cell_index=index, exception=ex)
+                self._cell_exception(self.nb.cells[index], index, exception=ex)
                 break
             finally:
-                self.nb_man.cell_complete(self.nb.cells[index], cell_index=index)
+                self._cell_complete(self.nb.cells[index], cell_index=index)
 
     def _get_timeout(self, cell: Optional[NotebookNode]) -> int:
         """Helper to fetch a timeout as a value or a function to be run against a cell"""

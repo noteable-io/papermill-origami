@@ -112,3 +112,22 @@ async def test_propagate_cell_execution_error(mocker, file, file_content, noteab
     noteable_engine.nb_man.cell_exception.assert_called_once_with(
         file_content.cells[-1], cell_index=len(file_content.cells) - 1, exception=ANY
     )
+
+
+@pytest.mark.parametrize(
+    "d, expected",
+    [
+        ({"a": {"b": 1, "c": 2}}, {("a", "b"): 1, ("a", "c"): 2}),
+        ({"a": {"b": 1, "c": {"d": 4}}}, {("a", "b"): 1, ("a", "c", "d"): 4}),
+        (
+            {"tags": ["parameters"], "jupyter": {"source_hidden": True}},
+            {("tags",): ["parameters"], ("jupyter", "source_hidden"): True},
+        ),
+        ({}, {}),
+    ],
+)
+def test_flatten_dict(d, expected):
+    # avoid circular import due to papermill engine registration
+    from papermill_origami.util import flatten_dict
+
+    assert flatten_dict(d) == expected
