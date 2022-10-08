@@ -110,7 +110,7 @@ async def test_propagate_cell_execution_error(mocker, file, file_content, noteab
     )
 
     noteable_engine.nb_man.cell_exception.assert_called_once_with(
-        file_content.cells[-1], cell_index=len(file_content.cells) - 1, exception=ANY
+        file_content.cells[-1], len(file_content.cells) - 1, exception=ANY
     )
 
 
