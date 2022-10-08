@@ -198,8 +198,8 @@ class NoteableEngine(Engine):
 
             await self.papermill_execute_cells()
 
-            # WARNING: This is a hack to ensure we have the client in session to send nb metadata
-            #          updates over RTU after execution.
+            # This is a hack to ensure we have the client in session to send nb metadata
+            # updates over RTU after execution.
             self.nb_man.notebook_complete()
             await self.sync_noteable_nb_metadata_with_papermill()
 
