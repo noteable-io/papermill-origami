@@ -105,6 +105,8 @@ class NoteableEngine(Engine):
         def wrapper(cell, *args, **kwargs):
             ret_val = func(cell, *args, **kwargs)
             # Update Noteable cell metadata
+            if not cell.metadata.get("papermill"):
+                return ret_val
             for key, value in flatten_dict(cell.metadata.papermill, parent_key_tuple=("papermill",)).items():
                 run_sync(self.km.client.update_cell_metadata)(
                     file=self.file,
@@ -242,6 +244,8 @@ class NoteableEngine(Engine):
     async def sync_noteable_nb_metadata_with_papermill(self):
         """Used to sync the papermill metadata of in-memory notebook representation that papermill manages with
         the Noteable notebook"""
+        if not self.nb.metadata.get("papermill"):
+            return
         for key, value in flatten_dict(self.nb.metadata.papermill, parent_key_tuple=("parameters",)).items():
             await self.km.client.update_nb_metadata(self.file, {"path": key, "value": value})
 
