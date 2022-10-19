@@ -144,11 +144,27 @@ serialized_context = b64decode(serialized_context_b64)
 
 context = cloudpickle.loads(serialized_context)
 {input_parameters}
+
+# Print out the applied parameter variable names and their types
+parameters = {base_parameters["__dm_input_names"]}
+parameter_types = [type(eval(parameter)).__name__ for parameter in parameters]
+
+import pandas
+from IPython.display import display, HTML
+display(
+    HTML(
+        pandas.DataFrame.from_dict(
+            {{"Dagster Applied Parameters": parameters, "Types": parameter_types}}
+        ).to_html(index=False)
+    )
+)
 """
 
                 nb_no_parameters = copy.deepcopy(nb)
                 newcell = nbformat.v4.new_code_cell(source=template)
                 newcell.metadata["tags"] = ["injected-parameters"]
+                # Hide the injected parameters cell source by default
+                newcell.metadata.setdefault("jupyter", {})["source_hidden"] = True
 
                 param_cell_index = _find_first_tagged_cell_index(nb_no_parameters, "parameters")
                 injected_cell_index = _find_first_tagged_cell_index(
