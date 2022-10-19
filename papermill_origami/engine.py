@@ -99,7 +99,7 @@ class NoteableEngine(Engine):
 
     def catch_cell_metadata_updates(self, func):
         """A decorator for catching cell metadata updates related to papermill
-         and updating the Noteable notebook via RTU"""
+        and updating the Noteable notebook via RTU"""
 
         @functools.wraps(func)
         def wrapper(cell, *args, **kwargs):
@@ -107,7 +107,9 @@ class NoteableEngine(Engine):
             # Update Noteable cell metadata
             if not cell.metadata.get("papermill"):
                 return ret_val
-            for key, value in flatten_dict(cell.metadata.papermill, parent_key_tuple=("papermill",)).items():
+            for key, value in flatten_dict(
+                cell.metadata.papermill, parent_key_tuple=("papermill",)
+            ).items():
                 run_sync(self.km.client.update_cell_metadata)(
                     file=self.file,
                     cell_id=cell.id,
@@ -246,7 +248,9 @@ class NoteableEngine(Engine):
         the Noteable notebook"""
         if not self.nb.metadata.get("papermill"):
             return
-        for key, value in flatten_dict(self.nb.metadata.papermill, parent_key_tuple=("parameters",)).items():
+        for key, value in flatten_dict(
+            self.nb.metadata.papermill, parent_key_tuple=("parameters",)
+        ).items():
             await self.km.client.update_nb_metadata(self.file, {"path": key, "value": value})
 
     @staticmethod
