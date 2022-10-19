@@ -208,7 +208,7 @@ class NoteableEngine(Engine):
             self.nb_man.notebook_complete()
             await self.sync_noteable_nb_metadata_with_papermill()
 
-            # Now override the notebook_complete method and set it to a no-op (since we already called it)
+            # Override the notebook_complete method and set it to a no-op (since we already called it)
             self.nb_man.notebook_complete = lambda: None
 
             # info_msg = self.wait_for_reply(self.kc.kernel_info())
@@ -249,7 +249,7 @@ class NoteableEngine(Engine):
         if not self.nb.metadata.get("papermill"):
             return
         for key, value in flatten_dict(
-            self.nb.metadata.papermill, parent_key_tuple=("parameters",)
+            self.nb.metadata.papermill, parent_key_tuple=("papermill",)
         ).items():
             await self.km.client.update_nb_metadata(self.file, {"path": key, "value": value})
 

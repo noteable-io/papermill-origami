@@ -123,6 +123,7 @@ async def test_propagate_cell_execution_error(mocker, file, file_content, noteab
             {"tags": ["parameters"], "jupyter": {"source_hidden": True}},
             {("tags",): ["parameters"], ("jupyter", "source_hidden"): True},
         ),
+        ({"default_parameters": {}}, {("default_parameters",): {}}),
         ({}, {}),
     ],
 )

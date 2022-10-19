@@ -18,7 +18,7 @@ def flatten_dict(d, parent_key_tuple: tuple = ()):
     items = {}
     for k, v in d.items():
         new_key_tuple = parent_key_tuple + (k,) if parent_key_tuple else (k,)
-        if isinstance(v, dict):
+        if isinstance(v, dict) and v:
             items.update(flatten_dict(v, new_key_tuple))
         else:
             items[new_key_tuple] = v
