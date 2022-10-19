@@ -140,7 +140,13 @@ def test_flatten_dict(d, expected):
         (
             {"tags": ["parameters"], "jupyter": {"source_hidden": True}},
             ("metadata",),
-            {("metadata", "tags",): ["parameters"], ("metadata", "jupyter", "source_hidden"): True},
+            {
+                (
+                    "metadata",
+                    "tags",
+                ): ["parameters"],
+                ("metadata", "jupyter", "source_hidden"): True,
+            },
         ),
         ({}, (), {}),
     ],
