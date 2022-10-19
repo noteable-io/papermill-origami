@@ -128,6 +128,8 @@ class NoteableEngine(Engine):
 
         dagster_logger = kwargs["logger"]
 
+        dagster_context = kwargs.get("dagster_context")
+
         # The original notebook id can either be the notebook file id or notebook version id
         original_notebook_id = kwargs.get("file_id")
         if original_notebook_id is None:
@@ -177,9 +179,30 @@ class NoteableEngine(Engine):
         self.file = await self.client.create_parameterized_notebook(
             original_notebook_id, job_instance_attempt=job_instance_attempt
         )
-        dagster_logger.info(
-            f"Parameterized notebook available at https://{self.client.config.domain}/f/{self.file.id}"
-        )
+        parameterized_url = f"https://{self.client.config.domain}/f/{self.file.id}"
+
+        self.nb.metadata["executed_notebook_url"] = parameterized_url
+        self.nb.metadata["parameterized_notebook_id"] = str(self.file.id)
+        if dagster_context:
+            from dagster import AssetObservation, DagsterEvent, MetadataValue
+            from dagster._core.events import AssetObservationData
+
+            asset_obs = AssetObservation(
+                asset_key=dagster_context.asset_key_for_output(),
+                description="Parameterized notebook available at",
+                metadata={"parameterized_notebook_url": MetadataValue.url(parameterized_url)},
+            )
+            event = DagsterEvent(
+                event_type_value="ASSET_OBSERVATION",
+                pipeline_name=dagster_context.job_name,
+                solid_handle=dagster_context.op_handle,
+                event_specific_data=AssetObservationData(asset_obs),
+            )
+            dagster_logger.log_dagster_event(
+                level="INFO", msg="Parameterized notebook available at", dagster_event=event
+            )
+        else:
+            dagster_logger.info(f"Parameterized notebook available at {parameterized_url}")
         # HACK: We need this delay in order to successfully subscribe to the files channel
         #       of the newly created parameterized notebook.
         await asyncio.sleep(1)
