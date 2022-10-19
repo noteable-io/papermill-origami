@@ -6,8 +6,7 @@ def removeprefix(s, prefix):
 
 
 def flatten_dict(d, parent_key_tuple: tuple = ()):
-    """Flattens a dictionary into a list of tuples with the first element as a list of keys
-    and the second element as the value
+    """Flattens a dictionary into a dict mapped from tuples of keys to values.
 
     Usage:
     >>> flatten_dict({"a": {"b": 1, "c": 2}})
