@@ -110,5 +110,50 @@ async def test_propagate_cell_execution_error(mocker, file, file_content, noteab
     )
 
     noteable_engine.nb_man.cell_exception.assert_called_once_with(
-        file_content.cells[-1], cell_index=len(file_content.cells) - 1, exception=ANY
+        file_content.cells[-1], len(file_content.cells) - 1, exception=ANY
     )
+
+
+@pytest.mark.parametrize(
+    "d, expected",
+    [
+        ({"a": {"b": 1, "c": 2}}, {("a", "b"): 1, ("a", "c"): 2}),
+        ({"a": {"b": 1, "c": {"d": 4}}}, {("a", "b"): 1, ("a", "c", "d"): 4}),
+        (
+            {"tags": ["parameters"], "jupyter": {"source_hidden": True}},
+            {("tags",): ["parameters"], ("jupyter", "source_hidden"): True},
+        ),
+        ({"default_parameters": {}}, {("default_parameters",): {}}),
+        ({}, {}),
+    ],
+)
+def test_flatten_dict(d, expected):
+    # avoid circular import due to papermill engine registration
+    from papermill_origami.util import flatten_dict
+
+    assert flatten_dict(d) == expected
+
+
+@pytest.mark.parametrize(
+    "d, parent_key_tuple, expected",
+    [
+        ({"a": {"b": 1, "c": 2}}, ("parent",), {("parent", "a", "b"): 1, ("parent", "a", "c"): 2}),
+        (
+            {"tags": ["parameters"], "jupyter": {"source_hidden": True}},
+            ("metadata",),
+            {
+                (
+                    "metadata",
+                    "tags",
+                ): ["parameters"],
+                ("metadata", "jupyter", "source_hidden"): True,
+            },
+        ),
+        ({}, (), {}),
+    ],
+)
+def test_flatten_dict_with_parent_key_tuple(d, parent_key_tuple, expected):
+    # avoid circular import due to papermill engine registration
+    from papermill_origami.util import flatten_dict
+
+    assert flatten_dict(d, parent_key_tuple) == expected
