@@ -131,3 +131,22 @@ def test_flatten_dict(d, expected):
     from papermill_origami.util import flatten_dict
 
     assert flatten_dict(d) == expected
+
+
+@pytest.mark.parametrize(
+    "d, parent_key_tuple, expected",
+    [
+        ({"a": {"b": 1, "c": 2}}, ("parent",), {("parent", "a", "b"): 1, ("parent", "a", "c"): 2}),
+        (
+            {"tags": ["parameters"], "jupyter": {"source_hidden": True}},
+            ("metadata",),
+            {("metadata", "tags",): ["parameters"], ("metadata", "jupyter", "source_hidden"): True},
+        ),
+        ({}, (), {}),
+    ],
+)
+def test_flatten_dict_with_parent_key_tuple(d, parent_key_tuple, expected):
+    # avoid circular import due to papermill engine registration
+    from papermill_origami.util import flatten_dict
+
+    assert flatten_dict(d, parent_key_tuple) == expected
