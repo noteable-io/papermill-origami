@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Add support for flyte
+- Allow specifying `job_instance_attempt` in engine kwargs
 
 ## [0.0.7] - 2022-10-05
 ### Changed
