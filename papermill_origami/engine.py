@@ -142,7 +142,7 @@ class NoteableEngine(Engine):
             else:
                 raise ValueError("No file_id or derivable file_id found for noteable scheme")
 
-        job_instance_attempt = None
+        job_instance_attempt = kwargs.get("job_instance_attempt")
         if job_metadata := kwargs.get("job_metadata", {}):
             version = await self.client.get_version_or_none(original_notebook_id)
             if version is not None:
