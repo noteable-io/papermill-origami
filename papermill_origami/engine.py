@@ -98,12 +98,12 @@ class NoteableEngine(Engine):
         self.nb = nb_man.nb
         # Map parent_collection_id to cell_id in order to process any append_output_events
         # which are uniquely identified by parent_collection_id and not cell_id
-        self.__output_collection_to_cell_id_cache = {}
+        self.__noteable_output_collection_cache = {}
 
         # Used to store created Jupyter outputs for the corresponding Noteable cell output by its output_id.
         # This is so that we can mutate the output in the event of a display handler update (e.g. progress bar)
         # Currently, this is only used when the output is of type display_data.
-        self.__output_id_cache = {}
+        self.__noteable_output_id_cache = {}
         self.file = None
 
     def catch_cell_metadata_updates(self, func):
@@ -422,14 +422,14 @@ class NoteableEngine(Engine):
         for output in resp.data.outputs:
             new_output = self._convert_noteable_output_to_jupyter_output(output)
 
-            self.__output_collection_to_cell_id_cache[
+            self.__noteable_output_collection_cache[
                 output.parent_collection_id
             ] = resp.data.cell_id
 
             # Cache the created output so that we can mutate it later if an
             # update_outputs_by_display_id_event is received against this output_id
             if output.type == "display_data":
-                self.__output_id_cache[str(output.id)] = new_output
+                self.__noteable_output_id_cache[str(output.id)] = new_output
 
             self.nb.cells[self._get_cell_index(resp.data.cell_id)].outputs.append(new_output)
 
@@ -441,7 +441,7 @@ class NoteableEngine(Engine):
         Callback to append cell outputs observed from Noteable over RTU into the
         corresponding cell outputs here in Papermill
         """
-        cell_id = self.__output_collection_to_cell_id_cache.get(resp.data.parent_collection_id)
+        cell_id = self.__noteable_output_collection_cache.get(resp.data.parent_collection_id)
 
         if cell_id is None:
             raise SkipCallback("Nothing found to append to")
@@ -449,7 +449,7 @@ class NoteableEngine(Engine):
         new_output = self._convert_noteable_output_to_jupyter_output(resp.data)
 
         if resp.data.type == "display_data":
-            self.__output_id_cache[str(resp.data.id)] = new_output
+            self.__noteable_output_id_cache[str(resp.data.id)] = new_output
 
         self.nb.cells[self._get_cell_index(cell_id)].outputs.append(new_output)
 
@@ -458,7 +458,7 @@ class NoteableEngine(Engine):
 
     async def _display_handler_update_callback(self, resp: DisplayHandlerUpdateEventSchema):
         outputs_to_update = [
-            self.__output_id_cache[output_id] for output_id in resp.data.output_ids
+            self.__noteable_output_id_cache[output_id] for output_id in resp.data.output_ids
         ]
         if not outputs_to_update:
             # Nothing to update
