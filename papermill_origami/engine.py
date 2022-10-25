@@ -24,6 +24,8 @@ from origami.types.jobs import (
 )
 from origami.types.rtu import (
     AppendOutputEventSchema,
+    DisplayHandlerUpdateEventSchema,
+    KernelOutput,
     KernelOutputType,
     UpdateOutputCollectionEventSchema,
 )
@@ -94,7 +96,14 @@ class NoteableEngine(Engine):
         self.stderr_file = stderr_file
         self.kernel_name = kw.get('kernel_name', '__NOT_SET__')
         self.nb = nb_man.nb
-        self.__noteable_output_collection_cache = {}
+        # Map parent_collection_id to cell_id in order to process any append_output_events
+        # which are uniquely identified by parent_collection_id and not cell_id
+        self.__output_collection_to_cell_id_cache = {}
+
+        # Used to store created Jupyter outputs for the corresponding Noteable cell output by its output_id.
+        # This is so that we can mutate the output in the event of a display handler update (e.g. progress bar)
+        # Currently, this is only used when the output is of type display_data.
+        self.__output_id_cache = {}
         self.file = None
 
     def catch_cell_metadata_updates(self, func):
@@ -339,6 +348,32 @@ class NoteableEngine(Engine):
         3. We want to include timing and execution status information with the
            metadata of each cell.
         """
+
+        files_channel = self.km.client.files_channel(file_id=self.km.file.id)
+        self.km.client.register_message_callback(
+            self._update_outputs_callback,
+            files_channel,
+            "update_output_collection_event",
+            response_schema=UpdateOutputCollectionEventSchema,
+            once=False,
+        )
+
+        self.km.client.register_message_callback(
+            self._append_outputs_callback,
+            files_channel,
+            "append_output_event",
+            response_schema=AppendOutputEventSchema,
+            once=False,
+        )
+
+        self.km.client.register_message_callback(
+            self._display_handler_update_callback,
+            files_channel,
+            "update_outputs_by_display_id_event",
+            response_schema=DisplayHandlerUpdateEventSchema,
+            once=False,
+        )
+
         # Execute each cell and update the output in real time.
         for index, cell in enumerate(self.nb.cells):
             try:
@@ -362,6 +397,119 @@ class NoteableEngine(Engine):
             timeout = None
 
         return timeout
+
+    def _get_cell_index(self, cell_id: str) -> int:
+        """Used to get the index of a cell in the papermill notebook representation.
+
+        We don't want to cache this because the
+        cell index can change if cells are added or deleted during execution,
+        which is not currently implemented, but could be in the future.
+        """
+        for idx, nb_cell in enumerate(self.nb.cells):
+            if nb_cell.id == cell_id:
+                return idx
+        raise ValueError(f"Cell with id {cell_id} not found")
+
+    async def _update_outputs_callback(self, resp: UpdateOutputCollectionEventSchema):
+        """Callback to set cell outputs observed from Noteable over RTU into the
+        corresponding cell outputs here in Papermill
+        """
+        if not resp.data.outputs:
+            # Clear output
+            self.nb.cells[self._get_cell_index(resp.data.cell_id)].outputs = []
+            return True
+
+        for output in resp.data.outputs:
+            new_output = self._convert_noteable_output_to_jupyter_output(output)
+
+            self.__output_collection_to_cell_id_cache[
+                output.parent_collection_id
+            ] = resp.data.cell_id
+
+            # Cache the created output so that we can mutate it later if an
+            # update_outputs_by_display_id_event is received against this output_id
+            if output.type == "display_data":
+                self.__output_id_cache[str(output.id)] = new_output
+
+            self.nb.cells[self._get_cell_index(resp.data.cell_id)].outputs.append(new_output)
+
+        # Mark the callback as successful
+        return True
+
+    async def _append_outputs_callback(self, resp: AppendOutputEventSchema):
+        """
+        Callback to append cell outputs observed from Noteable over RTU into the
+        corresponding cell outputs here in Papermill
+        """
+        cell_id = self.__output_collection_to_cell_id_cache.get(resp.data.parent_collection_id)
+
+        if cell_id is None:
+            raise SkipCallback("Nothing found to append to")
+
+        new_output = self._convert_noteable_output_to_jupyter_output(resp.data)
+
+        if resp.data.type == "display_data":
+            self.__output_id_cache[str(resp.data.id)] = new_output
+
+        self.nb.cells[self._get_cell_index(cell_id)].outputs.append(new_output)
+
+        # Mark the callback as successful
+        return True
+
+    async def _display_handler_update_callback(self, resp: DisplayHandlerUpdateEventSchema):
+        outputs_to_update = [
+            self.__output_id_cache[output_id] for output_id in resp.data.output_ids
+        ]
+        if not outputs_to_update:
+            # Nothing to update
+            return False
+
+        for output in outputs_to_update:
+            new_output = nbformat.v4.new_output(
+                "display_data",
+                data={resp.data.content.mimetype: resp.data.content.raw},
+            )
+            output.update(**new_output)
+        return True
+
+    @staticmethod
+    def _convert_noteable_output_to_jupyter_output(output: KernelOutput):
+        """Converts a Noteable KernelOutput to a Jupyter NotebookNode output
+
+        Note:
+        - KernelOutputType.clear_output:
+            Noteable backend will never send an explicit clear_output event,
+            but will instead send an empty list of outputs to clear the cell
+        - KernelOutputType.update_display_data:
+            Noteable backend will never send an explicit update_display_data event,
+            but will instead send an update_outputs_by_display_id_event
+            with a list of outputs to update by collection_id
+        """
+        # TODO: Handle fetching and parsing content via output.content.url
+        content = output.content.raw
+        if output.type == KernelOutputType.error:
+            error_data = orjson.loads(content)
+            return nbformat.v4.new_output(
+                "error",
+                **error_data,
+            )
+        elif output.type == KernelOutputType.stream:
+            return nbformat.v4.new_output(
+                "stream",
+                text=content,
+            )
+        elif output.type == KernelOutputType.execute_result:
+            return nbformat.v4.new_output(
+                "execute_result",
+                data={output.content.mimetype: content},
+            )
+        elif output.type == KernelOutputType.display_data:
+            return nbformat.v4.new_output(
+                "display_data",
+                data={output.content.mimetype: content},
+            )
+        else:
+            raise SkipCallback(f"Unhandled output type: {output.type}")
 
     async def async_execute_cell(
         self, cell: NotebookNode, cell_index: int, **kwargs
@@ -414,66 +562,6 @@ class NoteableEngine(Engine):
         #     or "raises-exception" in cell.metadata.get("tags", []))
 
         # By default this will wait until the cell execution status is no longer active
-
-        async def update_outputs_callback(resp: UpdateOutputCollectionEventSchema):
-            """Callback to set cell outputs observed from Noteable over RTU into the
-            corresponding cell outputs here in Papermill
-
-            TODO: This callback currently only sets error outputs. We will need to extend it to set all types of outputs
-                  with a translation layer from Noteable to Jupyter.
-            """
-            if resp.data.cell_id != cell.id:
-                raise SkipCallback("Not tracked cell")
-            if not resp.data.outputs:
-                raise SkipCallback("Nothing to do")
-
-            for output in resp.data.outputs:
-                # We need to map parent_collection_id to cell_id in order to process any append_output_events
-                # which are uniquely identified by collection_id and not cell_id
-                self.__noteable_output_collection_cache[output.parent_collection_id] = cell.id
-                if output.type == KernelOutputType.error:
-                    if output.content.raw:
-                        error_data = orjson.loads(output.content.raw)
-                        error_output = nbformat.v4.new_output("error", **error_data)
-                        self.nb.cells[cell_index].outputs.append(error_output)
-                        return True
-            return False
-
-        async def append_outputs_callback(resp: AppendOutputEventSchema):
-            """
-            Callback to append cell outputs observed from Noteable over RTU into the
-            corresponding cell outputs here in Papermill
-
-            TODO: This callback currently only sets error outputs. We will need to extend it to set all types of outputs
-                  with a translation layer from Noteable to Jupyter.
-            """
-            output = resp.data
-            cell_id = self.__noteable_output_collection_cache.get(output.parent_collection_id)
-
-            if cell_id != cell.id:
-                raise SkipCallback("Not tracked cell")
-
-            if output.type == KernelOutputType.error:
-                output = nbformat.v4.new_output("error", **orjson.loads(output.content.raw))
-                self.nb.cells[cell_index].outputs.append(output)
-                return True
-            return False
-
-        self.km.client.register_message_callback(
-            update_outputs_callback,
-            self.km.client.files_channel(file_id=self.km.file.id),
-            "update_output_collection_event",
-            response_schema=UpdateOutputCollectionEventSchema,
-            once=False,
-        )
-
-        self.km.client.register_message_callback(
-            append_outputs_callback,
-            self.km.client.files_channel(file_id=self.km.file.id),
-            "append_output_event",
-            response_schema=AppendOutputEventSchema,
-            once=False,
-        )
 
         result = await self.km.client.execute(self.km.file, cell.id)
         # TODO: This wasn't behaving correctly with the timeout?!
