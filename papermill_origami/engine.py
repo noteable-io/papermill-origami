@@ -422,9 +422,7 @@ class NoteableEngine(Engine):
         for output in resp.data.outputs:
             new_output = self._convert_noteable_output_to_jupyter_output(output)
 
-            self.__noteable_output_collection_cache[
-                output.parent_collection_id
-            ] = resp.data.cell_id
+            self.__noteable_output_collection_cache[output.parent_collection_id] = resp.data.cell_id
 
             # Cache the created output so that we can mutate it later if an
             # update_outputs_by_display_id_event is received against this output_id
