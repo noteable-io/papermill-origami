@@ -4,7 +4,7 @@ import sys
 import tempfile
 import uuid
 from base64 import b64encode
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Set, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Set, Union, cast
 
 import cloudpickle as pickle
 import nbformat
@@ -18,20 +18,14 @@ from dagster._core.execution.context.compute import SolidExecutionContext
 from dagster._core.execution.context.input import build_input_context
 from dagster._core.execution.context.system import StepExecutionContext
 from dagster._core.execution.plan.outputs import StepOutputHandle
-from dagster._core.storage.file_manager import FileHandle
-from dagster._legacy import InputDefinition, OutputDefinition, SolidDefinition
 from dagster._utils import safe_tempfile_path
-from dagster._utils.backcompat import rename_warning
 from dagster._utils.error import serializable_error_info_from_exc_info
 from dagstermill import _load_input_parameter, _reconstitute_pipeline_context
 from dagstermill.compat import ExecutionError
 from dagstermill.factory import _find_first_tagged_cell_index, get_papermill_parameters
-from jupyter_client.utils import run_sync
-from origami.client import ClientConfig, NoteableClient
-from papermill.iorw import load_notebook_node, papermill_io, write_ipynb
+from papermill.iorw import load_notebook_node, write_ipynb
 from papermill.translators import PythonTranslator
 
-from ..iorw import NoteableHandler
 from ..util import removeprefix
 from .context import SerializableExecutionContext
 
@@ -70,21 +64,9 @@ def _dm_compute(
 
                 executed_notebook_path = os.path.join(output_notebook_dir, f"{prefix}-out.ipynb")
 
-                # noteable specific client
-                noteable_client = NoteableClient(config=ClientConfig())
-                # needs to be done before `load_notebook_node`
-
-                # We need to explicitly register the `NoteableHandler` with the client here,
-                # otherwise, `NoteableHandler.read` will try to create a new `NoteableClient`
-                # which will conflict with the one we have here.
-                papermill_io.register("noteable://", NoteableHandler(noteable_client))
-                run_sync(noteable_client.__aenter__)()
-
                 # Scaffold the registration here
                 nb = load_notebook_node(notebook_path)
-                compute_descriptor = (
-                    "solid" if dagster_factory_name == "define_dagstermill_solid" else "op"
-                )
+                compute_descriptor = "op"
 
                 base_parameters = get_papermill_parameters(
                     step_execution_context,
@@ -190,14 +172,13 @@ display(
                 write_ipynb(nb_no_parameters, parameterized_notebook_path)
 
                 try:
-                    papermill.execute_notebook(
+                    executed_nb = papermill.execute_notebook(
                         input_path=parameterized_notebook_path,
                         output_path=executed_notebook_path,
                         engine_name="noteable-dagstermill",  # noteable specific
                         log_output=True,
                         # noteable specific args
                         file_id=file_id,
-                        client=noteable_client,
                         job_metadata={
                             'job_definition_id': job_definition_id,
                             'job_instance_id': job_instance_id,
@@ -219,14 +200,12 @@ display(
                         )
 
                     raise
-                finally:
-                    run_sync(noteable_client.__aexit__)(None, None, None)
 
             step_execution_context.log.debug(
                 f"Notebook execution complete for {name} at {executed_notebook_path}."
             )
             if output_notebook_name is not None:
-                # yield output notebook binary stream as a solid output
+                # yield output notebook binary stream as an op output
                 with open(executed_notebook_path, "rb") as fd:
                     yield Output(fd.read(), output_notebook_name)
 
@@ -249,6 +228,9 @@ display(
                         description="Location of output notebook in file manager",
                         metadata={
                             "path": MetadataValue.path(executed_notebook_materialization_path),
+                            "executed_notebook": MetadataValue.url(
+                                executed_nb.metadata.get("executed_notebook_url")
+                            ),
                         },
                     )
 
@@ -305,116 +287,9 @@ display(
     return _t_fn
 
 
-def define_noteable_dagstermill_solid(
+def define_noteable_dagster_op(
     name: str,
-    notebook_path: str,
-    input_defs: Optional[Sequence[InputDefinition]] = None,
-    output_defs: Optional[Sequence[OutputDefinition]] = None,
-    config_schema: Optional[Union[Any, Dict[str, Any]]] = None,
-    required_resource_keys: Optional[Set[str]] = None,
-    output_notebook: Optional[str] = None,
-    output_notebook_name: Optional[str] = None,
-    asset_key_prefix: Optional[Union[List[str], str]] = None,
-    description: Optional[str] = None,
-    tags: Optional[Dict[str, Any]] = None,
-):
-    """Wrap a Jupyter notebook in a solid. Copied from `define_dagstermill_solid`.
-
-    Arguments:
-        name (str): The name of the solid.
-        notebook_path (str): Path to the backing notebook.
-        input_defs (Optional[List[InputDefinition]]): The solid's inputs.
-        output_defs (Optional[List[OutputDefinition]]): The solid's outputs. Your notebook should
-            call :py:func:`~dagstermill.yield_result` to yield each of these outputs.
-        config_schema (Optional[Union[Any, Dict[str, Any]]]): The op's config schema.
-        required_resource_keys (Optional[Set[str]]): The string names of any required resources.
-        output_notebook (Optional[str]): If set, will be used as the name of an injected output of
-            type :py:class:`~dagster.FileHandle` that will point to the executed notebook (in
-            addition to the :py:class:`~dagster.AssetMaterialization` that is always created). This
-            respects the :py:class:`~dagster._core.storage.file_manager.FileManager` configured on
-            the pipeline resources via the "file_manager" resource key, so, e.g.,
-            if :py:class:`~dagster_aws.s3.s3_file_manager` is configured, the output will be a :
-            py:class:`~dagster_aws.s3.S3FileHandle`.
-        output_notebook_name: (Optional[str]): If set, will be used as the name of an injected output
-            of type of :py:class:`~dagster.BufferedIOBase` that is the file object of the executed
-            notebook (in addition to the :py:class:`~dagster.AssetMaterialization` that is always
-            created). It allows the downstream solids to access the executed notebook via a file
-            object.
-        asset_key_prefix (Optional[Union[List[str], str]]): If set, will be used to prefix the
-            asset keys for materialized notebooks.
-        description (Optional[str]): If set, description used for solid.
-        tags (Optional[Dict[str, str]]): If set, additional tags used to annotate solid.
-            Dagster uses the tag keys `notebook_path` and `kind`, which cannot be
-            overwritten by the user.
-    Returns:
-        :py:class:`~dagster.SolidDefinition`
-    """
-    check.str_param(name, "name")
-    check.str_param(notebook_path, "notebook_path")
-    input_defs = check.opt_list_param(input_defs, "input_defs", of_type=InputDefinition)
-    output_defs = check.opt_list_param(output_defs, "output_defs", of_type=OutputDefinition)
-    required_resource_keys = set(
-        check.opt_set_param(required_resource_keys, "required_resource_keys", of_type=str)
-    )
-
-    extra_output_defs = []
-    if output_notebook_name is not None:
-        required_resource_keys.add("output_notebook_io_manager")
-        extra_output_defs.append(
-            OutputDefinition(name=output_notebook_name, io_manager_key="output_notebook_io_manager")
-        )
-    # backcompact
-    if output_notebook is not None:
-        rename_warning(
-            new_name="output_notebook_name",
-            old_name="output_notebook",
-            breaking_version="0.14.0",
-        )
-        required_resource_keys.add("file_manager")
-        extra_output_defs.append(OutputDefinition(dagster_type=FileHandle, name=output_notebook))
-
-    if isinstance(asset_key_prefix, str):
-        asset_key_prefix = [asset_key_prefix]
-
-    asset_key_prefix = check.opt_list_param(asset_key_prefix, "asset_key_prefix", of_type=str)
-
-    default_description = f"This solid is backed by the notebook at {notebook_path}"
-    description = check.opt_str_param(description, "description", default=default_description)
-
-    user_tags = validate_tags(tags)
-    if tags is not None:
-        check.invariant(
-            "notebook_path" not in tags,
-            "user-defined solid tags contains the `notebook_path` key, but the `notebook_path` key is reserved for use by Dagster",  # noqa: E501
-        )
-        check.invariant(
-            "kind" not in tags,
-            "user-defined solid tags contains the `kind` key, but the `kind` key is reserved for use by Dagster",
-        )
-    default_tags = {"notebook_path": notebook_path, "kind": "ipynb"}
-
-    return SolidDefinition(
-        name=name,
-        input_defs=input_defs,
-        compute_fn=_dm_compute(
-            "define_dagstermill_solid",
-            name,
-            notebook_path,
-            output_notebook_name,
-            asset_key_prefix=asset_key_prefix,
-            output_notebook=output_notebook,  # backcompact
-        ),
-        output_defs=output_defs + extra_output_defs,
-        config_schema=config_schema,
-        required_resource_keys=required_resource_keys,
-        description=description,
-        tags={**user_tags, **default_tags},
-    )
-
-
-def define_noteable_dagstermill_op(
-    name: str,
-    notebook_path: str,
+    notebook_id: str,
     ins: Optional[Mapping[str, In]] = None,
     outs: Optional[Mapping[str, Out]] = None,
     config_schema: Optional[Union[Any, Dict[str, Any]]] = None,
@@ -428,7 +303,7 @@ def define_noteable_dagstermill_op(
 
     Arguments:
         name (str): The name of the op.
-        notebook_path (str): Path to the backing notebook.
+        notebook_id (str): ID of the backing notebook.
         ins (Optional[Mapping[str, In]]): The op's inputs.
         outs (Optional[Mapping[str, Out]]): The op's outputs. Your notebook should
             call :py:func:`~dagstermill.yield_result` to yield each of these outputs.
@@ -449,7 +324,12 @@ def define_noteable_dagstermill_op(
         :py:class:`~dagster.OpDefinition`
     """
     check.str_param(name, "name")
-    check.str_param(notebook_path, "notebook_path")
+
+    # TODO - make these parameterizable/from env vars?
+    notebook_path = f"noteable://{notebook_id}"
+    domain = os.getenv("NOTEABLE_DOMAIN", "app.noteable.io")
+    notebook_url = f"https://{domain}/f/{notebook_id}"
+
     required_resource_keys = set(
         check.opt_set_param(required_resource_keys, "required_resource_keys", of_type=str)
     )
@@ -468,7 +348,7 @@ def define_noteable_dagstermill_op(
 
     asset_key_prefix = check.opt_list_param(asset_key_prefix, "asset_key_prefix", of_type=str)
 
-    default_description = f"This op is backed by the notebook at {notebook_path}"
+    default_description = f"This op is backed by the notebook at {notebook_url}"
     description = check.opt_str_param(description, "description", default=default_description)
 
     user_tags = validate_tags(tags)
@@ -481,12 +361,12 @@ def define_noteable_dagstermill_op(
             "kind" not in tags,
             "user-defined solid tags contains the `kind` key, but the `kind` key is reserved for use by Dagster",
         )
-    default_tags = {"notebook_path": notebook_path, "kind": "ipynb"}
+    default_tags = {"notebook_path": notebook_url, "kind": "noteable"}
 
     return OpDefinition(
         name=name,
         compute_fn=_dm_compute(
-            "define_dagstermill_op",
+            "define_noteable_dagster_op",
             name,
             notebook_path,
             output_notebook_name,
