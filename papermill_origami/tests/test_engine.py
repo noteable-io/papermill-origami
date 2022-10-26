@@ -6,11 +6,7 @@ from unittest.mock import ANY
 
 import nbformat
 import pytest
-from origami.types.rtu import (
-    KernelOutput,
-    KernelOutputContent,
-    KernelOutputType,
-)
+from origami.types.rtu import KernelOutput, KernelOutputContent, KernelOutputType
 from orjson import orjson
 
 
