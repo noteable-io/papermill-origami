@@ -1,9 +1,17 @@
 import copy
 import logging
+import uuid
+from datetime import datetime
 from unittest.mock import ANY
 
 import nbformat
 import pytest
+from origami.types.rtu import (
+    KernelOutput,
+    KernelOutputContent,
+    KernelOutputType,
+)
+from orjson import orjson
 
 
 @pytest.fixture
@@ -157,3 +165,149 @@ def test_flatten_dict_with_parent_key_tuple(d, parent_key_tuple, expected):
     from papermill_origami.util import flatten_dict
 
     assert flatten_dict(d, parent_key_tuple) == expected
+
+
+@pytest.fixture
+def create_noteable_output():
+    def _wrapper(type, content):
+        return KernelOutput(
+            type=type,
+            available_mimetypes=["text/plain"],
+            content=content,
+            content_metadata=KernelOutputContent(raw="", mimetype="text/plain"),
+            id=uuid.uuid4(),
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+            parent_collection_id=uuid.uuid4(),
+        )
+
+    return _wrapper
+
+
+@pytest.mark.asyncio
+class TestUpdateOutputsCallback:
+    async def test_update_outputs_callback_clears_outputs(
+        self, mocker, file, file_content, noteable_engine
+    ):
+        resp = mocker.Mock()
+        resp.data.outputs = []
+        resp.data.cell_id = file_content.cells[0].id
+
+        # Add a mock output to the cell
+        noteable_engine.nb.cells[0].outputs = [mocker.Mock()]
+        await noteable_engine._update_outputs_callback(resp)
+
+        # Assert that the output was cleared
+        assert noteable_engine.nb.cells[0].outputs == []
+
+    @pytest.mark.parametrize(
+        "type, content",
+        [
+            (KernelOutputType.stream, KernelOutputContent(raw="test", mimetype="text/plain")),
+            (
+                KernelOutputType.error,
+                KernelOutputContent(
+                    raw=orjson.dumps(
+                        {"ename": "fake ename", "evalue": "fake evalue", "traceback": []}
+                    ),
+                    mimetype="text/plain",
+                ),
+            ),
+            (
+                KernelOutputType.execute_result,
+                KernelOutputContent(raw="test", mimetype="text/plain"),
+            ),
+            (KernelOutputType.display_data, KernelOutputContent(raw="test", mimetype="text/plain")),
+        ],
+    )
+    async def test_update_outputs_callback_updates_outputs(
+        self, mocker, file, file_content, noteable_engine, create_noteable_output, type, content
+    ):
+        resp = mocker.Mock()
+        resp.data.cell_id = file_content.cells[0].id
+
+        noteable_output = create_noteable_output(type, content)
+        resp.data.outputs = [noteable_output]
+
+        await noteable_engine._update_outputs_callback(resp)
+
+        jupyter_output = noteable_engine.nb.cells[0].outputs[0]
+        if type == KernelOutputType.stream:
+            assert jupyter_output.name == "stdout"
+            assert jupyter_output.text == "test"
+        elif type in (KernelOutputType.execute_result, KernelOutputType.display_data):
+            assert jupyter_output.data == {"text/plain": "test"}
+        elif type == KernelOutputType.error:
+            assert jupyter_output.ename == "fake ename"
+            assert jupyter_output.evalue == "fake evalue"
+            assert jupyter_output.traceback == []
+
+    async def test_update_outputs_callback_updates_cache(
+        self, mocker, file, file_content, create_noteable_output, noteable_engine
+    ):
+        resp = mocker.Mock()
+        resp.data.cell_id = file_content.cells[0].id
+
+        noteable_output = create_noteable_output(
+            type="display_data", content=KernelOutputContent(raw="test", mimetype="text/plain")
+        )
+        resp.data.outputs = [noteable_output]
+
+        await noteable_engine._update_outputs_callback(resp)
+
+        # Trigger a _display_handler_update_callback to check that the cache was updated
+        display_handler_resp = mocker.Mock()
+        display_handler_resp.data.output_ids = [str(noteable_output.id)]
+        display_handler_resp.data.content.mimetype = "text/plain"
+        display_handler_resp.data.content.raw = "updated text"
+        await noteable_engine._display_handler_update_callback(display_handler_resp)
+
+        # Assert that the cache was updated, and hence the output was updated
+        assert noteable_engine.nb.cells[0].outputs[0].data == {"text/plain": "updated text"}
+
+
+@pytest.mark.asyncio
+class TestAppendOutputsCallback:
+    async def test_append_outputs_callback_appends_outputs(
+        self, mocker, file, file_content, noteable_engine, create_noteable_output
+    ):
+        resp = mocker.Mock()
+        resp.data.cell_id = file_content.cells[0].id
+
+        noteable_output = create_noteable_output(
+            type="display_data", content=KernelOutputContent(raw="test", mimetype="text/plain")
+        )
+        parent_collection_id = noteable_output.parent_collection_id
+
+        resp.data.outputs = [noteable_output]
+
+        # Add an output so we have something to append to
+        await noteable_engine._update_outputs_callback(resp)
+
+        append_outputs_resp = mocker.Mock()
+        append_outputs_resp.data.parent_collection_id = parent_collection_id
+        append_output = create_noteable_output(
+            type="display_data",
+            content=KernelOutputContent(raw="appended text", mimetype="text/plain"),
+        )
+        append_outputs_resp.data = append_output
+
+        # Override the parent_collection_id to be the same as the original output
+        append_outputs_resp.data.parent_collection_id = parent_collection_id
+
+        await noteable_engine._append_outputs_callback(append_outputs_resp)
+
+        # Assert that the output was appended
+        assert len(noteable_engine.nb.cells[0].outputs) == 2
+        assert noteable_engine.nb.cells[0].outputs[1].data == {"text/plain": "appended text"}
+
+        # Trigger a _display_handler_update_callback to check that the cache was updated
+        display_handler_resp = mocker.Mock()
+        display_handler_resp.data.output_ids = [str(noteable_output.id), str(append_output.id)]
+        display_handler_resp.data.content.mimetype = "text/plain"
+        display_handler_resp.data.content.raw = "updated text"
+        await noteable_engine._display_handler_update_callback(display_handler_resp)
+
+        # Assert that the cache was updated, and hence the output was updated
+        assert noteable_engine.nb.cells[0].outputs[0].data == {"text/plain": "updated text"}
+        assert noteable_engine.nb.cells[0].outputs[1].data == {"text/plain": "updated text"}

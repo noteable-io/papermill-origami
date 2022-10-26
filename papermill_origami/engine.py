@@ -426,7 +426,7 @@ class NoteableEngine(Engine):
 
             # Cache the created output so that we can mutate it later if an
             # update_outputs_by_display_id_event is received against this output_id
-            if output.type == "display_data":
+            if output.type == KernelOutputType.display_data:
                 self.__noteable_output_id_cache[str(output.id)] = new_output
 
             self.nb.cells[self._get_cell_index(resp.data.cell_id)].outputs.append(new_output)
@@ -446,7 +446,7 @@ class NoteableEngine(Engine):
 
         new_output = self._convert_noteable_output_to_jupyter_output(resp.data)
 
-        if resp.data.type == "display_data":
+        if resp.data.type == KernelOutputType.display_data:
             self.__noteable_output_id_cache[str(resp.data.id)] = new_output
 
         self.nb.cells[self._get_cell_index(cell_id)].outputs.append(new_output)
