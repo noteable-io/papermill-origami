@@ -182,12 +182,10 @@ def create_noteable_output():
 
 @pytest.mark.asyncio
 class TestUpdateOutputsCallback:
-    async def test_update_outputs_callback_clears_outputs(
-        self, mocker, file, file_content, noteable_engine
-    ):
+    async def test_update_outputs_callback_clears_outputs(self, mocker, noteable_engine):
         resp = mocker.Mock()
         resp.data.outputs = []
-        resp.data.cell_id = file_content.cells[0].id
+        resp.data.cell_id = noteable_engine.nb.cells[0].id
 
         # Add a mock output to the cell
         noteable_engine.nb.cells[0].outputs = [mocker.Mock()]
@@ -217,10 +215,10 @@ class TestUpdateOutputsCallback:
         ],
     )
     async def test_update_outputs_callback_updates_outputs(
-        self, mocker, file, file_content, noteable_engine, create_noteable_output, type, content
+        self, mocker, noteable_engine, create_noteable_output, type, content
     ):
         resp = mocker.Mock()
-        resp.data.cell_id = file_content.cells[0].id
+        resp.data.cell_id = noteable_engine.nb.cells[0].id
 
         noteable_output = create_noteable_output(type, content)
         resp.data.outputs = [noteable_output]
@@ -239,10 +237,10 @@ class TestUpdateOutputsCallback:
             assert jupyter_output.traceback == []
 
     async def test_update_outputs_callback_updates_cache(
-        self, mocker, file, file_content, create_noteable_output, noteable_engine
+        self, mocker, create_noteable_output, noteable_engine
     ):
         resp = mocker.Mock()
-        resp.data.cell_id = file_content.cells[0].id
+        resp.data.cell_id = noteable_engine.nb.cells[0].id
 
         noteable_output = create_noteable_output(
             type="display_data", content=KernelOutputContent(raw="test", mimetype="text/plain")
@@ -265,10 +263,10 @@ class TestUpdateOutputsCallback:
 @pytest.mark.asyncio
 class TestAppendOutputsCallback:
     async def test_append_outputs_callback_appends_outputs(
-        self, mocker, file, file_content, noteable_engine, create_noteable_output
+        self, mocker, noteable_engine, create_noteable_output
     ):
         resp = mocker.Mock()
-        resp.data.cell_id = file_content.cells[0].id
+        resp.data.cell_id = noteable_engine.nb.cells[0].id
 
         noteable_output = create_noteable_output(
             type="display_data", content=KernelOutputContent(raw="test", mimetype="text/plain")
