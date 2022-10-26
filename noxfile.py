@@ -10,7 +10,7 @@ nox.options.sessions = ["lint", "test"]
 @nox_poetry.session(python=["3.8", "3.9", "3.10"])
 def test(session: nox_poetry.Session):
     session.run_always("poetry", "install", "-E", "dagster", "-E", "flyte", external=True)
-    session.run("pytest", "-v", "--cov=origami")
+    session.run("pytest", "-v", "--cov=papermill_origami")
 
 
 @nox_poetry.session(python="3.9")
