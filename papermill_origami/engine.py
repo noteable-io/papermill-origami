@@ -24,11 +24,11 @@ from origami.types.jobs import (
 )
 from origami.types.rtu import (
     AppendOutputEventSchema,
+    BulkCellStateMessage,
     DisplayHandlerUpdateEventSchema,
     KernelOutput,
     KernelOutputType,
     UpdateOutputCollectionEventSchema,
-    BulkCellStateMessage,
 )
 from papermill.engines import Engine, NotebookExecutionManager
 

@@ -7,10 +7,10 @@ from unittest.mock import ANY
 import nbformat
 import pytest
 from origami.types.rtu import (
+    CellStateMessageData,
     KernelOutput,
     KernelOutputContent,
     KernelOutputType,
-    CellStateMessageData,
 )
 from orjson import orjson
 
@@ -316,9 +316,10 @@ class TestAppendOutputsCallback:
 async def test_update_execution_count_callback(mocker, noteable_engine):
     resp = mocker.Mock()
     cell_ids = [noteable_engine.nb.cells[0].id, noteable_engine.nb.cells[1].id]
+    fake_kernel_session_id = uuid.uuid4()
     cell_states = [
         CellStateMessageData(
-            kernel_session_id=uuid.uuid4(),
+            kernel_session_id=fake_kernel_session_id,
             state="finished_with_no_error",
             cell_id=cell_id,
             execution_count=idx,
