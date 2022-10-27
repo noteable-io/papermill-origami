@@ -28,6 +28,7 @@ from origami.types.rtu import (
     KernelOutput,
     KernelOutputType,
     UpdateOutputCollectionEventSchema,
+    BulkCellStateMessage,
 )
 from papermill.engines import Engine, NotebookExecutionManager
 
@@ -374,6 +375,14 @@ class NoteableEngine(Engine):
             once=False,
         )
 
+        self.km.client.register_message_callback(
+            self._update_execution_count_callback,
+            self.km.kernel.kernel_channel,
+            "bulk_cell_state_update_event",
+            response_schema=BulkCellStateMessage,
+            once=False,
+        )
+
         # Execute each cell and update the output in real time.
         for index, cell in enumerate(self.nb.cells):
             try:
@@ -468,6 +477,18 @@ class NoteableEngine(Engine):
                 data={resp.data.content.mimetype: resp.data.content.raw},
             )
             output.update(**new_output)
+        return True
+
+    async def _update_execution_count_callback(self, resp: BulkCellStateMessage):
+        """Callback to set cell execution count observed from Noteable over RTU into the
+        corresponding cell execution count here in Papermill
+        """
+        for cell_state in resp.data.cell_states:
+            self.nb.cells[
+                self._get_cell_index(cell_state.cell_id)
+            ].execution_count = cell_state.execution_count
+
+        # Mark the callback as successful
         return True
 
     @staticmethod
