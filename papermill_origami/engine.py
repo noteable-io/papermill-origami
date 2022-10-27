@@ -484,9 +484,8 @@ class NoteableEngine(Engine):
         corresponding cell execution count here in Papermill
         """
         for cell_state in resp.data.cell_states:
-            self.nb.cells[
-                self._get_cell_index(cell_state.cell_id)
-            ].execution_count = cell_state.execution_count
+            cell_index = self._get_cell_index(cell_state.cell_id)
+            self.nb.cells[cell_index].execution_count = cell_state.execution_count
 
         # Mark the callback as successful
         return True
