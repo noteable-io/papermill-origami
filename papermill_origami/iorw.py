@@ -23,13 +23,11 @@ def _ensure_client(func):
         else:
             # If we're not a handler, we need to create a handler instance
             # and then bind the function to it
-            client_config = ClientConfig()
-            if (url := urlparse(obj)).scheme == "https" and url.netloc != client_config.domain:
-                logger.warning(
-                    "The domain from the file URL does not match the domain from the default client config"
-                )
-
-            with NoteableClient(config=client_config) as client:
+            with NoteableClient() as client:
+                if (url := urlparse(obj)).scheme == "https" and url.netloc != client.config.domain:
+                    logger.warning(
+                        "The domain from the file URL does not match the domain from the default client config"
+                    )
                 instance = NoteableHandler(client)
                 bound_method = func.__get__(instance, instance.__class__)
                 return bound_method(obj, *args, **kwargs)
