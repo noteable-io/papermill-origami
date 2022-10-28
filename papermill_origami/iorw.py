@@ -1,13 +1,17 @@
 """The iorw module provides the handlers for registration with papermill to read/write Notebooks"""
 import functools
 import json
+from urllib.parse import urlparse
 
 import httpx
+import structlog
 from jupyter_client.utils import run_sync
-from origami.client import NoteableClient
+from origami.client import NoteableClient, ClientConfig
 from origami.types.files import FileVersion
 
 from papermill_origami.util import parse_noteable_file_id
+
+logger = structlog.get_logger(__name__)
 
 
 def _ensure_client(func):
@@ -19,9 +23,12 @@ def _ensure_client(func):
         else:
             # If we're not a handler, we need to create a handler instance
             # and then bind the function to it
-            # TODO: check if the domain from config and the domain from the file URL match
-            #       and log a warning if they do not
-            with NoteableClient() as client:
+            client_config = ClientConfig()
+            if (url := urlparse(obj)).scheme == "https" and url.netloc != client_config.domain:
+                print("domain does not match")
+                logger.warning("The domain from the file URL does not match the domain from the default client config")
+
+            with NoteableClient(config=client_config) as client:
                 instance = NoteableHandler(client)
                 bound_method = func.__get__(instance, instance.__class__)
                 return bound_method(obj, *args, **kwargs)
