@@ -165,11 +165,14 @@ def test_flatten_dict_with_parent_key_tuple(d, parent_key_tuple, expected):
     assert flatten_dict(d, parent_key_tuple) == expected
 
 
-@pytest.mark.parametrize("url, file_id", [
-    ("noteable://fake_id", "fake_id"),
-    ("https://app.noteable.io/f/fake_id/my-new-notebook.ipynb", "fake_id"),
-    ("https://app.noteable.io/f/fake_id", "fake_id"),
-])
+@pytest.mark.parametrize(
+    "url, file_id",
+    [
+        ("noteable://fake_id", "fake_id"),
+        ("https://app.noteable.io/f/fake_id/my-new-notebook.ipynb", "fake_id"),
+        ("https://app.noteable.io/f/fake_id", "fake_id"),
+    ],
+)
 def test_parse_noteable_file_id(url, file_id):
     assert parse_noteable_file_id(url) == file_id
 
