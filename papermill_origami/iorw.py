@@ -25,7 +25,6 @@ def _ensure_client(func):
             # and then bind the function to it
             client_config = ClientConfig()
             if (url := urlparse(obj)).scheme == "https" and url.netloc != client_config.domain:
-                print("domain does not match")
                 logger.warning(
                     "The domain from the file URL does not match the domain from the default client config"
                 )
