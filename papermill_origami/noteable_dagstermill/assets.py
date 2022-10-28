@@ -32,7 +32,7 @@ from dagstermill.factory import _find_first_tagged_cell_index, get_papermill_par
 from papermill.iorw import load_notebook_node, write_ipynb
 from papermill.translators import PythonTranslator
 
-from ..util import removeprefix
+from ..util import parse_noteable_file_id
 from .context import SerializableExecutionContext
 
 
@@ -77,7 +77,7 @@ def _dm_compute(
                 )
                 job_definition_id = step_execution_context.job_name
                 job_instance_id = step_execution_context.run_id
-                file_id = removeprefix(notebook_path, "noteable://")
+                file_id = parse_noteable_file_id(notebook_path)
                 noteable_parameters = {
                     'job_definition_id': job_definition_id,
                     'job_instance_id': job_instance_id,
