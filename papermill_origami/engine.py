@@ -33,7 +33,7 @@ from origami.types.rtu import (
 from papermill.engines import Engine, NotebookExecutionManager
 
 from .manager import NoteableKernelManager
-from .util import flatten_dict, removeprefix
+from .util import flatten_dict, parse_noteable_file_id
 
 logger = logging.getLogger(__name__)
 
@@ -147,10 +147,10 @@ class NoteableEngine(Engine):
             maybe_input_path = kwargs.get("input_path")
             if maybe_file:
                 original_notebook_id = maybe_file.id
-            elif maybe_input_path and "noteable://" in maybe_input_path:
-                original_notebook_id = removeprefix(maybe_input_path, "noteable://")
+            elif maybe_input_path and (file_id := parse_noteable_file_id(maybe_input_path)):
+                original_notebook_id = file_id
             else:
-                raise ValueError("No file_id or derivable file_id found for noteable scheme")
+                raise ValueError("No file_id or derivable file_id found")
 
         job_instance_attempt = kwargs.get("job_instance_attempt")
         if job_metadata := kwargs.get("job_metadata", {}):
