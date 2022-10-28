@@ -6,7 +6,12 @@ from unittest.mock import ANY
 
 import nbformat
 import pytest
-from origami.types.rtu import KernelOutput, KernelOutputContent, KernelOutputType
+from origami.types.rtu import (
+    CellStateMessageData,
+    KernelOutput,
+    KernelOutputContent,
+    KernelOutputType,
+)
 from orjson import orjson
 
 
@@ -305,3 +310,25 @@ class TestAppendOutputsCallback:
         # Assert that the cache was updated, and hence the output was updated
         assert noteable_engine.nb.cells[0].outputs[0].data == {"text/plain": "updated text"}
         assert noteable_engine.nb.cells[0].outputs[1].data == {"text/plain": "updated text"}
+
+
+@pytest.mark.asyncio
+async def test_update_execution_count_callback(mocker, noteable_engine):
+    resp = mocker.Mock()
+    cell_ids = [noteable_engine.nb.cells[0].id, noteable_engine.nb.cells[1].id]
+    fake_kernel_session_id = uuid.uuid4()
+    cell_states = [
+        CellStateMessageData(
+            kernel_session_id=fake_kernel_session_id,
+            state="finished_with_no_error",
+            cell_id=cell_id,
+            execution_count=idx,
+        )
+        for idx, cell_id in enumerate(cell_ids)
+    ]
+    resp.data.cell_states = cell_states
+
+    await noteable_engine._update_execution_count_callback(resp)
+
+    assert noteable_engine.nb.cells[0].execution_count == 0
+    assert noteable_engine.nb.cells[1].execution_count == 1
