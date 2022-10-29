@@ -43,7 +43,7 @@ flytekitplugins-papermill = {version = "^1.2.1", optional = true}
 
 [tool.poetry.dev-dependencies]
 flake8-docstrings = "^1.6.0"
-pytest-httpx = "^0.21.0"
+pytest-httpx = "^0.21.1"
 black = {version = "^22.3.0", allow-prereleases = true}
 isort = "^5.10.1"
 boto = "^2.49.0"
