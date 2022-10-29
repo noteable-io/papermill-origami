@@ -5,9 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [0.0.8] - 2022-10-28
 ### Added
 - Add support for flyte
 - Allow specifying `job_instance_attempt` in engine kwargs
+- Remove dagstermill teardown cell
+- Sync all papermill metadata to Noteable
+- Hide applied parameters cell by default for dagster
+- Add Noteable Dagster asset
+- Sync outputs from Noteable into papermill
+- Sync execution counts from cell state updates
+- Add ability to parse Noteable https URLs to extract file id
 
 ## [0.0.7] - 2022-10-05
 ### Changed
