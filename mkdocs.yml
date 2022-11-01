@@ -48,6 +48,7 @@ plugins:
       default_handler: python
       handlers:
         python:
+          paths: [papermill_origami]
           rendering:
             show_source: true
       watch: [papermill_origami, README.md, CONTRIBUTING.md, CHANGELOG.md]
