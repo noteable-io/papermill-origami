@@ -5,7 +5,7 @@ import json
 import httpx
 from jupyter_client.utils import run_sync
 from origami.client import NoteableClient
-from origami.types.files import FileVersion
+from origami.defs.files import FileVersion
 
 
 def _ensure_client(func):

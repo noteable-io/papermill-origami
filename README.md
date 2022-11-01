@@ -15,10 +15,13 @@ A papermill engine for running Noteable notebooks
 
 [Install](#installation) | [Getting Started](#getting-started) | [License](./LICENSE) | [Code of Conduct](./CODE_OF_CONDUCT.md) | [Contributing](./CONTRIBUTING.md)
 
+# --8<-- [start:requirements]
 ## Requirements
 
 Python 3.8+
+# --8<-- [start:requirements]
 
+# --8<-- [start:install]
 ## Installation
 
 ### Poetry
@@ -27,12 +30,13 @@ Python 3.8+
 poetry add papermill-origami
 ```
 
-
 ### Pip
 ```shell
 pip install papermill-origami
 ```
+# --8<-- [end:install]
 
+# --8<-- [start:start]
 ## Getting Started
 
 ### API Token
@@ -106,6 +110,7 @@ async with NoteableClient(token, config=ClientConfig(domain=domain)) as client:
         client=client,
     )
 ```
+# --8<-- [end:start]
 
 ## Contributing
 

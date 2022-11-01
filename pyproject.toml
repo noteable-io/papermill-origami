@@ -34,7 +34,7 @@ url = "https://pypi.org"
 
 [tool.poetry.dependencies]
 python = "^3.8"
-noteable-origami = "^0.0.6"
+noteable-origami = "^0.0.10"
 papermill = "^2.4.0"
 dagstermill = {version = "^1.0.5", optional = true}
 cloudpickle = "^2.2.0"
