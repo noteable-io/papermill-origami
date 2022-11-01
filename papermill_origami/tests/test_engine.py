@@ -6,7 +6,7 @@ from unittest.mock import ANY
 
 import nbformat
 import pytest
-from origami.types.rtu import (
+from origami.defs.rtu import (
     CellStateMessageData,
     KernelOutput,
     KernelOutputContent,

@@ -1,5 +1,5 @@
 # papermill-origami
-A papermill engine for running Noteable notebooks
+    A papermill engine for running Noteable notebooks
 
 <p align="center">
 <a href="https://github.com/noteable-io/papermill-origami/actions/workflows/ci.yaml">
@@ -15,11 +15,17 @@ A papermill engine for running Noteable notebooks
 
 [Install](#installation) | [Getting Started](#getting-started) | [License](./LICENSE) | [Code of Conduct](./CODE_OF_CONDUCT.md) | [Contributing](./CONTRIBUTING.md)
 
+# --8<-- [start:intro]
+## Intro to Papermill-Origami
+
+Papermill-Origami is the bridge library between the [Origami Noteable SDK](https://noteable-origami.readthedocs.io/en/latest/) and [Papermill](https://papermill.readthedocs.io/en/latest/). It build a papermill engine that can talk to Noteable APIs to run Notebooks. 
+# --8<-- [end:intro]
+
 # --8<-- [start:requirements]
 ## Requirements
 
 Python 3.8+
-# --8<-- [start:requirements]
+# --8<-- [end:requirements]
 
 # --8<-- [start:install]
 ## Installation
