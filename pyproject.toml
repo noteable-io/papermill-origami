@@ -5,7 +5,7 @@
 
 [tool.poetry]
 name = "papermill-origami"
-version = "0.0.7"
+version = "0.0.8"
 description = "The noteable API interface"
 authors = ["Matt Seal <matt@noteable.io>"]
 maintainers = ["Matt Seal <matt@noteable.io>"]
@@ -38,6 +38,8 @@ noteable-origami = "^0.0.10"
 papermill = "^2.4.0"
 dagstermill = {version = "^1.0.5", optional = true}
 cloudpickle = "^2.2.0"
+flytekit = {version = "^1.2.1", optional = true}
+flytekitplugins-papermill = {version = "^1.2.1", optional = true}
 
 [tool.poetry.dev-dependencies]
 flake8-docstrings = "^1.6.0"
@@ -56,9 +58,11 @@ bump2version = "^1.0.1"
 
 [tool.poetry.extras]
 dagster = ["dagstermill"]
+flyte = ["flytekit", "flytekitplugins-papermill"]
 
 [tool.poetry.plugins."papermill.io"]
 "noteable://" = "papermill_origami.iorw:NoteableHandler"
+"https://" = "papermill_origami.iorw:NoteableHandler"
 
 [tool.poetry.plugins."papermill.engine"]
 noteable = "papermill_origami.engine:NoteableEngine"

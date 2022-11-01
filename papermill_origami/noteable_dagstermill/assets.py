@@ -4,20 +4,26 @@ import sys
 import tempfile
 import uuid
 from base64 import b64encode
-from typing import Any, Dict, List, Mapping, Optional, Set, Union, cast
+from typing import Any, Dict, Mapping, Optional, Set, Union
 
 import cloudpickle as pickle
+import dagster._check as check
 import nbformat
 import papermill
-from dagster import In, OpDefinition, Out
-from dagster import _check as check
-from dagster._core.definitions.events import AssetMaterialization, Failure, Output, RetryRequested
-from dagster._core.definitions.metadata import MetadataValue
+from dagster import (
+    AssetIn,
+    AssetKey,
+    MetadataValue,
+    Nothing,
+    Output,
+    PartitionsDefinition,
+    ResourceDefinition,
+    asset,
+)
+from dagster._core.definitions.events import CoercibleToAssetKeyPrefix
 from dagster._core.definitions.utils import validate_tags
 from dagster._core.execution.context.compute import SolidExecutionContext
-from dagster._core.execution.context.input import build_input_context
 from dagster._core.execution.context.system import StepExecutionContext
-from dagster._core.execution.plan.outputs import StepOutputHandle
 from dagster._utils import safe_tempfile_path
 from dagster._utils.error import serializable_error_info_from_exc_info
 from dagstermill import _load_input_parameter, _reconstitute_pipeline_context
@@ -31,28 +37,23 @@ from .context import SerializableExecutionContext
 
 
 def _dm_compute(
-    dagster_factory_name,
     name,
     notebook_path,
-    output_notebook_name=None,
-    asset_key_prefix=None,
-    output_notebook=None,
+    notebook_url,
 ):
     check.str_param(name, "name")
     check.str_param(notebook_path, "notebook_path")
-    check.opt_str_param(output_notebook_name, "output_notebook_name")
-    check.opt_list_param(asset_key_prefix, "asset_key_prefix")
-    check.opt_str_param(output_notebook, "output_notebook")
+    check.str_param(notebook_url, "notebook_url")
 
-    def _t_fn(step_context, inputs):
-        check.inst_param(step_context, "step_context", SolidExecutionContext)
+    def _t_fn(context, **inputs):
+        check.inst_param(context, "context", SolidExecutionContext)
         check.param_invariant(
-            isinstance(step_context.run_config, dict),
+            isinstance(context.run_config, dict),
             "context",
             "StepExecutionContext must have valid run_config",
         )
 
-        step_execution_context: StepExecutionContext = step_context.get_step_execution_context()
+        step_execution_context: StepExecutionContext = context.get_step_execution_context()
 
         with tempfile.TemporaryDirectory() as output_notebook_dir:
             with safe_tempfile_path() as output_log_path:
@@ -167,7 +168,6 @@ display(
                     before = []
                     after = nb_no_parameters.cells
                 nb_no_parameters.cells = before + [newcell] + after
-                # nb_no_parameters.metadata.papermill["parameters"] = _seven.json.dumps(parameters)
 
                 write_ipynb(nb_no_parameters, parameterized_notebook_path)
 
@@ -184,6 +184,7 @@ display(
                             'job_instance_id': job_instance_id,
                         },
                         logger=step_execution_context.log,
+                        dagster_context=context,
                     )
                 except Exception as ex:
                     step_execution_context.log.warn(
@@ -198,134 +199,74 @@ display(
                             f"Encountered raised {ex.ename} in notebook. Use dagstermill.yield_event "
                             "with RetryRequested or Failure to trigger their behavior."
                         )
-
                     raise
 
             step_execution_context.log.debug(
                 f"Notebook execution complete for {name} at {executed_notebook_path}."
             )
-            if output_notebook_name is not None:
-                # yield output notebook binary stream as an op output
-                with open(executed_notebook_path, "rb") as fd:
-                    yield Output(fd.read(), output_notebook_name)
-
-            else:
-                # backcompat
-                executed_notebook_file_handle = None
-                try:
-                    # use binary mode when when moving the file since certain file_managers such as S3
-                    # may try to hash the contents
-                    with open(executed_notebook_path, "rb") as fd:
-                        executed_notebook_file_handle = step_context.resources.file_manager.write(
-                            fd, mode="wb", ext="ipynb"
-                        )
-                        executed_notebook_materialization_path = (
-                            executed_notebook_file_handle.path_desc
-                        )
-
-                    yield AssetMaterialization(
-                        asset_key=(asset_key_prefix + [f"{name}_output_notebook"]),
-                        description="Location of output notebook in file manager",
-                        metadata={
-                            "path": MetadataValue.path(executed_notebook_materialization_path),
-                            "executed_notebook": MetadataValue.url(
-                                executed_nb.metadata.get("executed_notebook_url")
-                            ),
-                        },
+            return Output(
+                None,
+                metadata={
+                    "latest_successful_executed_notebook": MetadataValue.url(
+                        executed_nb.metadata.get("executed_notebook_url")
                     )
-
-                except Exception:
-                    # if file manager writing errors, e.g. file manager is not provided, we throw a warning
-                    # and fall back to the previously stored temp executed notebook.
-                    step_context.log.warning(
-                        "Error when attempting to materialize executed notebook using file manager: "
-                        f"{str(serializable_error_info_from_exc_info(sys.exc_info()))}"
-                        f"\nNow falling back to local: notebook execution was temporarily materialized at {executed_notebook_path}"  # noqa: E501
-                        "\nIf you have supplied a file manager and expect to use it for materializing the "
-                        'notebook, please include "file_manager" in the `required_resource_keys` argument '
-                        f"to `{dagster_factory_name}`"
-                    )
-
-                if output_notebook is not None:
-                    yield Output(executed_notebook_file_handle, output_notebook)
-
-            # deferred import for perf
-            import scrapbook
-
-            output_nb = scrapbook.read_notebook(executed_notebook_path)
-
-            for (
-                output_name,
-                _,
-            ) in step_execution_context.solid_def.output_dict.items():
-                data_dict = output_nb.scraps.data_dict
-                if output_name in data_dict:
-                    # read outputs that were passed out of process via io manager from `yield_result`
-                    step_output_handle = StepOutputHandle(
-                        step_key=step_execution_context.step.key,
-                        output_name=output_name,
-                    )
-                    output_context = step_execution_context.get_output_context(step_output_handle)
-                    io_manager = step_execution_context.get_io_manager(step_output_handle)
-                    value = io_manager.load_input(
-                        build_input_context(
-                            upstream_output=output_context, dagster_type=output_context.dagster_type
-                        )
-                    )
-
-                    yield Output(value, output_name)
-
-            for key, value in output_nb.scraps.items():
-                if key.startswith("event-"):
-                    with open(value.data, "rb") as fd:
-                        event = pickle.loads(fd.read())
-                        if isinstance(event, (Failure, RetryRequested)):
-                            raise event
-                        else:
-                            yield event
+                },
+            )
 
     return _t_fn
 
 
-def define_noteable_dagster_op(
+def define_noteable_dagster_asset(
     name: str,
     notebook_id: str,
-    ins: Optional[Mapping[str, In]] = None,
-    outs: Optional[Mapping[str, Out]] = None,
+    key_prefix: Optional[CoercibleToAssetKeyPrefix] = None,
+    ins: Optional[Mapping[str, AssetIn]] = None,
+    non_argument_deps: Optional[Union[Set[AssetKey], Set[str]]] = None,
+    metadata: Optional[Mapping[str, Any]] = None,
     config_schema: Optional[Union[Any, Dict[str, Any]]] = None,
     required_resource_keys: Optional[Set[str]] = None,
-    output_notebook_name: Optional[str] = None,
-    asset_key_prefix: Optional[Union[List[str], str]] = None,
+    resource_defs: Optional[Mapping[str, ResourceDefinition]] = None,
     description: Optional[str] = None,
-    tags: Optional[Dict[str, Any]] = None,
+    partitions_def: Optional[PartitionsDefinition] = None,
+    op_tags: Optional[Dict[str, Any]] = None,
+    group_name: Optional[str] = None,
 ):
-    """Wrap a Jupyter notebook in a op. Copied from `define_dagstermill_op`.
+    """Creates a Dagster asset for a Noteable notebook.
 
     Arguments:
-        name (str): The name of the op.
-        notebook_id (str): ID of the backing notebook.
-        ins (Optional[Mapping[str, In]]): The op's inputs.
-        outs (Optional[Mapping[str, Out]]): The op's outputs. Your notebook should
-            call :py:func:`~dagstermill.yield_result` to yield each of these outputs.
-        config_schema (Optional[Union[Any, Dict[str, Any]]]): The op's config schema.
-        required_resource_keys (Optional[Set[str]]): The string names of any required resources.
-        output_notebook_name: (Optional[str]): If set, will be used as the name of an injected output
-            of type of :py:class:`~dagster.BufferedIOBase` that is the file object of the executed
-            notebook (in addition to the :py:class:`~dagster.AssetMaterialization` that is always
-            created). It allows the downstream ops to access the executed notebook via a file
-            object.
-        asset_key_prefix (Optional[Union[List[str], str]]): If set, will be used to prefix the
-            asset keys for materialized notebooks.
-        description (Optional[str]): If set, description used for op.
-        tags (Optional[Dict[str, str]]): If set, additional tags used to annotate op.
-            Dagster uses the tag keys `notebook_path` and `kind`, which cannot be
-            overwritten by the user.
-    Returns:
-        :py:class:`~dagster.OpDefinition`
+        name (str): The name for the asset
+        notebook_id (str): The id of the Noteable notebook
+        key_prefix (Optional[Union[str, Sequence[str]]]): If provided, the asset's key is the
+            concatenation of the key_prefix and the asset's name, which defaults to the name of
+            the decorated function. Each item in key_prefix must be a valid name in dagster (ie only
+            contains letters, numbers, and _) and may not contain python reserved keywords.
+        ins (Optional[Mapping[str, AssetIn]]): A dictionary that maps input names to information
+            about the input.
+        non_argument_deps (Optional[Union[Set[AssetKey], Set[str]]]): Set of asset keys that are
+            upstream dependencies, but do not pass an input to the asset.
+        config_schema (Optional[ConfigSchema): The configuration schema for the asset's underlying
+            op. If set, Dagster will check that config provided for the op matches this schema and fail
+            if it does not. If not set, Dagster will accept any config provided for the op.
+        metadata (Optional[Dict[str, Any]]): A dict of metadata entries for the asset.
+        required_resource_keys (Optional[Set[str]]): Set of resource handles required by the notebook.
+        description (Optional[str]): Description of the asset to display in Dagit.
+        partitions_def (Optional[PartitionsDefinition]): Defines the set of partition keys that
+            compose the asset.
+        op_tags (Optional[Dict[str, Any]]): A dictionary of tags for the op that computes the asset.
+            Frameworks may expect and require certain metadata to be attached to a op. Values that
+            are not strings will be json encoded and must meet the criteria that
+            `json.loads(json.dumps(value)) == value`.
+        group_name (Optional[str]): A string name used to organize multiple assets into groups. If not provided,
+            the name "default" is used.
+        resource_defs (Optional[Mapping[str, ResourceDefinition]]):
+            (Experimental) A mapping of resource keys to resource definitions. These resources
+            will be initialized during execution, and can be accessed from the
+            context within the notebook.
     """
-    check.str_param(name, "name")
 
-    # TODO - make these parameterizable/from env vars?
+    check.str_param(name, "name")
+    check.str_param(notebook_id, "notebook_id")
+
     notebook_path = f"noteable://{notebook_id}"
     domain = os.getenv("NOTEABLE_DOMAIN", "app.noteable.io")
     notebook_url = f"https://{domain}/f/{notebook_id}"
@@ -333,49 +274,47 @@ def define_noteable_dagster_op(
     required_resource_keys = set(
         check.opt_set_param(required_resource_keys, "required_resource_keys", of_type=str)
     )
-    outs = check.opt_mapping_param(outs, "outs", key_type=str, value_type=Out)
-    ins = check.opt_mapping_param(ins, "ins", key_type=str, value_type=In)
+    ins = check.opt_mapping_param(ins, "ins", key_type=str, value_type=AssetIn)
 
-    if output_notebook_name is not None:
-        required_resource_keys.add("output_notebook_io_manager")
-        outs = {
-            **outs,
-            cast(str, output_notebook_name): Out(io_manager_key="output_notebook_io_manager"),
-        }
+    if isinstance(key_prefix, str):
+        key_prefix = [key_prefix]
 
-    if isinstance(asset_key_prefix, str):
-        asset_key_prefix = [asset_key_prefix]
+    key_prefix = check.opt_list_param(key_prefix, "key_prefix", of_type=str)
 
-    asset_key_prefix = check.opt_list_param(asset_key_prefix, "asset_key_prefix", of_type=str)
-
-    default_description = f"This op is backed by the notebook at {notebook_url}"
+    default_description = f"This asset is backed by the notebook at {notebook_url}"
     description = check.opt_str_param(description, "description", default=default_description)
 
-    user_tags = validate_tags(tags)
-    if tags is not None:
+    user_tags = validate_tags(op_tags)
+    if op_tags is not None:
         check.invariant(
-            "notebook_path" not in tags,
-            "user-defined solid tags contains the `notebook_path` key, but the `notebook_path` key is reserved for use by Dagster",  # noqa: E501
+            "notebook_path" not in op_tags,
+            "user-defined op tags contains the `notebook_path` key, but the `notebook_path` key is reserved for use by Dagster",  # noqa: E501
         )
         check.invariant(
-            "kind" not in tags,
-            "user-defined solid tags contains the `kind` key, but the `kind` key is reserved for use by Dagster",
+            "kind" not in op_tags,
+            "user-defined op tags contains the `kind` key, but the `kind` key is reserved for use by Dagster",
         )
     default_tags = {"notebook_path": notebook_url, "kind": "noteable"}
 
-    return OpDefinition(
+    return asset(
         name=name,
-        compute_fn=_dm_compute(
-            "define_noteable_dagster_op",
-            name,
-            notebook_path,
-            output_notebook_name,
-            asset_key_prefix=asset_key_prefix,
-        ),
+        key_prefix=key_prefix,
         ins=ins,
-        outs=outs,
+        non_argument_deps=non_argument_deps,
+        metadata=metadata,
+        description=description,
         config_schema=config_schema,
         required_resource_keys=required_resource_keys,
-        description=description,
-        tags={**user_tags, **default_tags},
+        resource_defs=resource_defs,
+        partitions_def=partitions_def,
+        op_tags={**user_tags, **default_tags},
+        group_name=group_name,
+        output_required=False,
+        dagster_type=Nothing,
+    )(
+        _dm_compute(
+            name=name,
+            notebook_path=notebook_path,
+            notebook_url=notebook_url,
+        )
     )

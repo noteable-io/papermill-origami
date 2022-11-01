@@ -10,8 +10,9 @@ To use the `noteable-dagstermill` engine, ensure you use the following import:
 from papermill.engines import papermill_engines
 from papermill.translators import papermill_translators
 
+from .assets import define_noteable_dagster_asset
 from .engine import NoteableDagstermillEngine
-from .ops import define_noteable_dagstermill_op  # noqa: F401
+from .ops import define_noteable_dagster_op  # noqa: F401
 from .translator import DagsterTranslator
 
 papermill_engines.register("noteable-dagstermill", NoteableDagstermillEngine)
