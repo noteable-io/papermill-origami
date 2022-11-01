@@ -1,13 +1,13 @@
 To rebuild the site run:
 
 ```bash
-PYTHONPATH=path/to/papermill-origami/papermill_origami mkdocs build
+mkdocs build
 ```
 
 To serve the docs run:
 
 ```bash
-PYTHONPATH=path/to/papermill-origami/papermill_origami mkdocs serve
+mkdocs serve
 ```
 
 To verify a file has appropriate commenting to support mkdocs use:
