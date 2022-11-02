@@ -28,9 +28,10 @@ from dagster._utils import safe_tempfile_path
 from dagster._utils.error import serializable_error_info_from_exc_info
 from dagstermill import _load_input_parameter, _reconstitute_pipeline_context
 from dagstermill.compat import ExecutionError
-from dagstermill.factory import _find_first_tagged_cell_index, get_papermill_parameters
+from dagstermill.factory import _find_first_tagged_cell_index, get_papermill_parameters, replace_parameters
 from papermill.iorw import load_notebook_node, write_ipynb
 from papermill.translators import PythonTranslator
+from dagster import _seven
 
 from ..util import removeprefix
 from .context import SerializableExecutionContext
@@ -143,11 +144,73 @@ display(
 )
 """
 
+#                 template = f"""# Injected parameters
+# import cloudpickle
+# from base64 import b64decode
+
+# {input_parameters}
+
+# # Print out the applied parameter variable names and their types
+# parameters = {base_parameters["__dm_input_names"]}
+# parameter_types = [type(eval(parameter)).__name__ for parameter in parameters]
+
+# import pandas
+# from IPython.display import display, HTML
+# display(
+#     HTML(
+#         pandas.DataFrame.from_dict(
+#             {{"Dagster Applied Parameters": parameters, "Types": parameter_types}}
+#         ).to_html(index=False)
+#     )
+# )
+# """
+
+                # asset_key = context.asset_key_for_output()
+                # job_name = context.job_name
+                # op_handle_encoded=b64encode(pickle.dumps(context.op_handle))
+                # instance_encoded = b64encode(pickle.dumps(context.instance))
+
+                end_template = """ print('hello') """
+
+#                 end_template = f"""# If your notebook fails to execute, run this cell
+# notebook_succeeded = False # switch this to True once the notebook has succeeded
+
+# if notebook_succeeded:
+#     from dagster import build_op_context, AssetKey, AssetObservation, DagsterEvent, MetadataValue
+#     from dagster._core.events import AssetObservationData
+#     from dagster._core.definitions.dependency import NodeHandle
+#     import cloudpickle
+#     from base64 import b64decode
+
+#     op_handle = cloudpickle.loads(b64decode({op_handle_encoded}))
+#     print(dir(op_handle))
+#     instance = cloudpickle.loads(b64decode({instance_encoded}))
+#     print(instance)
+#     dagster_logger = build_op_context(instance=instance).log
+
+#     notebook_succeeded_observation = AssetObservation(
+#     asset_key="{asset_key}",
+#         description="Successful notebook execution",
+#     )
+#     event = DagsterEvent(
+#         event_type_value="ASSET_OBSERVATION",
+#         pipeline_name="{job_name}",
+#         solid_handle=op_handle,
+#         event_specific_data=AssetObservationData(notebook_succeeded_observation),
+#     )
+#     dagster_logger.log_dagster_event(
+#         level="INFO", msg="Notebook execution succeeded", dagster_event=event
+#     )
+
+# """
+
                 nb_no_parameters = copy.deepcopy(nb)
                 newcell = nbformat.v4.new_code_cell(source=template)
                 newcell.metadata["tags"] = ["injected-parameters"]
                 # Hide the injected parameters cell source by default
                 newcell.metadata.setdefault("jupyter", {})["source_hidden"] = True
+
+                endcell = nbformat.v4.new_code_cell(source=end_template)
 
                 param_cell_index = _find_first_tagged_cell_index(nb_no_parameters, "parameters")
                 injected_cell_index = _find_first_tagged_cell_index(
@@ -167,7 +230,7 @@ display(
                     # Inject to the top of the notebook, presumably first cell includes dagstermill import
                     before = []
                     after = nb_no_parameters.cells
-                nb_no_parameters.cells = before + [newcell] + after
+                nb_no_parameters.cells = before + [newcell] + after + [endcell]
 
                 write_ipynb(nb_no_parameters, parameterized_notebook_path)
 
