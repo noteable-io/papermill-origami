@@ -6,7 +6,7 @@ from typing import Optional
 from jupyter_client.managerabc import KernelManagerABC
 from jupyter_client.utils import run_sync
 from origami.client import NoteableClient
-from origami.types.files import NotebookFile
+from origami.defs.files import NotebookFile
 
 
 class NoteableKernelManager(KernelManagerABC):

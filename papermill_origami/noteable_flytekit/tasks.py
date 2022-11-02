@@ -8,7 +8,7 @@ from flytekit.loggers import logger
 from flytekitplugins.papermill import NotebookTask
 from flytekitplugins.papermill.task import PAPERMILL_TASK_PREFIX, T, _dummy_task_func
 
-from papermill_origami.util import removeprefix
+from papermill_origami.util import parse_noteable_file_id
 
 
 class NoteableNotebookTask(NotebookTask):
@@ -63,12 +63,12 @@ class NoteableNotebookTask(NotebookTask):
     @property
     def output_notebook_path(self) -> str:
         # ensure the output path is on the local filesystem
-        return removeprefix(super().output_notebook_path, "noteable://")
+        return parse_noteable_file_id(super().output_notebook_path)
 
     @property
     def rendered_output_path(self) -> str:
         # ensure the output path is on the local filesystem
-        return removeprefix(super().rendered_output_path, "noteable://")
+        return parse_noteable_file_id(super().rendered_output_path)
 
     def execute(self, **kwargs) -> Any:
         """
