@@ -140,35 +140,37 @@ display(
 )
 """
 
-                end_template_1 = """# If your notebook fails to execute, switch notebook_succeeded to True
-# and execute this cell and the following cell
-notebook_succeeded = False # switch this to True once the notebook has succeeded
+#                 end_template_1 = """# If your notebook fails to execute, switch notebook_succeeded to True
+# # and execute this cell and the following cell
+# notebook_succeeded = False # switch this to True once the notebook has succeeded
+# """
+#                 asset_key = context.asset_key_for_output()
+#                 job_name = context.job_name
+#                 op_handle_encoded=b64encode(pickle.dumps(context.op_handle))
 
-"""
-                asset_key = context.asset_key_for_output()
-                job_name = context.job_name
+#                 end_template_2 = f"""if notebook_succeeded:
+#     from dagster import AssetObservation, DagsterEvent
+#     from dagster._core.events import AssetObservationData
+#     from dagstermill import yield_event
+#     import cloudpickle
+#     from base64 import b64decode
 
-                end_template_2 = f"""
+#     op_handle = cloudpickle.loads(b64decode({op_handle_encoded}))
 
-if notebook_succeeded:
-    from dagster import AssetObservation, DagsterEvent
-    from dagster._core.events import AssetObservationData
-    from dagstermill import yield_event
+#     notebook_succeeded_observation = AssetObservation(
+#     asset_key="{asset_key}",
+#         description="Successful notebook execution",
+#     )
+#     event = DagsterEvent(
+#         event_type_value="ASSET_OBSERVATION",
+#         pipeline_name="{job_name}",
+#         solid_handle=op_handle,
+#         event_specific_data=AssetObservationData(notebook_succeeded_observation),
+#     )
 
-    notebook_succeeded_observation = AssetObservation(
-    asset_key="{asset_key}",
-        description="Successful notebook execution",
-    )
-    event = DagsterEvent(
-        event_type_value="ASSET_OBSERVATION",
-        pipeline_name="{job_name}",
-        solid_handle=op_handle,
-        event_specific_data=AssetObservationData(notebook_succeeded_observation),
-    )
+#     yield_event(event)
 
-    yield_event(event)
-
-"""
+# """
 
 
                 nb_no_parameters = copy.deepcopy(nb)
@@ -177,8 +179,8 @@ if notebook_succeeded:
                 # Hide the injected parameters cell source by default
                 newcell.metadata.setdefault("jupyter", {})["source_hidden"] = True
 
-                endcell_1 = nbformat.v4.new_code_cell(source=end_template_1)
-                endcell_2 = nbformat.v4.new_code_cell(source=end_template_2)
+                # endcell_1 = nbformat.v4.new_code_cell(source=end_template_1)
+                # endcell_2 = nbformat.v4.new_code_cell(source=end_template_2)
 
                 param_cell_index = _find_first_tagged_cell_index(nb_no_parameters, "parameters")
                 injected_cell_index = _find_first_tagged_cell_index(
@@ -198,7 +200,9 @@ if notebook_succeeded:
                     # Inject to the top of the notebook, presumably first cell includes dagstermill import
                     before = []
                     after = nb_no_parameters.cells
-                nb_no_parameters.cells = before + [newcell] + after + [endcell_1, endcell_2]
+                # nb_no_parameters.cells = before + [newcell] + after + [endcell_1, endcell_2]
+                nb_no_parameters.cells = before + [newcell] + after 
+
 
                 write_ipynb(nb_no_parameters, parameterized_notebook_path)
 
