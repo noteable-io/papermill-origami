@@ -63,6 +63,7 @@ flyte = ["flytekit", "flytekitplugins-papermill"]
 [tool.poetry.plugins."papermill.io"]
 "noteable://" = "papermill_origami.iorw:NoteableHandler"
 "https://" = "papermill_origami.iorw:NoteableHandler"
+"http://" = "papermill_origami.iorw:NoteableHandler"
 
 [tool.poetry.plugins."papermill.engine"]
 noteable = "papermill_origami.engine:NoteableEngine"

@@ -24,7 +24,7 @@ def _ensure_client(func):
             # If we're not a handler, we need to create a handler instance
             # and then bind the function to it
             with NoteableClient() as client:
-                if (url := urlparse(obj)).scheme == "https" and url.netloc != client.config.domain:
+                if (url := urlparse(obj)).scheme in ("https", "http") and url.netloc != client.config.domain:
                     logger.warning(
                         "The domain from the file URL does not match the domain from the default client config"
                     )
@@ -49,6 +49,8 @@ class NoteableHandler:
         """Reads a file from the noteable client by either version id, file id or file url"""
         id = parse_noteable_file_id(path)
         # Wrap the async call since we're in a blocking method
+        print("fails after this")
+        print(id)
         file_version: FileVersion = run_sync(self.client.get_version_or_none)(id)
         if file_version is not None:
             resp = httpx.get(file_version.content_presigned_url)
