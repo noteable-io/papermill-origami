@@ -19,6 +19,8 @@ from dagster import (
     PartitionsDefinition,
     ResourceDefinition,
     asset,
+    op,
+    job
 )
 from dagster._core.definitions.events import CoercibleToAssetKeyPrefix
 from dagster._core.definitions.utils import validate_tags
@@ -32,6 +34,7 @@ from dagstermill.factory import _find_first_tagged_cell_index, get_papermill_par
 from papermill.iorw import load_notebook_node, write_ipynb
 from papermill.translators import PythonTranslator
 from dagster import _seven
+from origami.client import NoteableClient
 
 from ..util import parse_noteable_file_id
 from .context import SerializableExecutionContext
@@ -140,37 +143,36 @@ display(
 )
 """
 
-#                 end_template_1 = """# If your notebook fails to execute, switch notebook_succeeded to True
-# # and execute this cell and the following cell
-# notebook_succeeded = False # switch this to True once the notebook has succeeded
-# """
-#                 asset_key = context.asset_key_for_output()
-#                 job_name = context.job_name
-#                 op_handle_encoded=b64encode(pickle.dumps(context.op_handle))
+                asset_key = context.asset_key_for_output()
+                job_name = context.job_name
+                op_handle_encoded=b64encode(pickle.dumps(context.op_handle))
 
-#                 end_template_2 = f"""if notebook_succeeded:
-#     from dagster import AssetObservation, DagsterEvent
-#     from dagster._core.events import AssetObservationData
-#     from dagstermill import yield_event
-#     import cloudpickle
-#     from base64 import b64decode
+                end_template_1 = f"""# If your notebook fails to execute, switch notebook_succeeded to True
+# and execute this cell
+notebook_succeeded = False # switch this to True once the notebook has succeeded
 
-#     op_handle = cloudpickle.loads(b64decode({op_handle_encoded}))
+if notebook_succeeded:
+    from dagster import AssetObservation, DagsterEvent
+    from dagster._core.events import AssetObservationData
+    from dagstermill import yield_event
+    import cloudpickle
+    from base64 import b64decode
 
-#     notebook_succeeded_observation = AssetObservation(
-#     asset_key="{asset_key}",
-#         description="Successful notebook execution",
-#     )
-#     event = DagsterEvent(
-#         event_type_value="ASSET_OBSERVATION",
-#         pipeline_name="{job_name}",
-#         solid_handle=op_handle,
-#         event_specific_data=AssetObservationData(notebook_succeeded_observation),
-#     )
+    op_handle = cloudpickle.loads(b64decode({op_handle_encoded}))
 
-#     yield_event(event)
+    notebook_succeeded_observation = AssetObservation(
+    asset_key="{asset_key}",
+        description="Successful notebook execution",
+    )
+    event = DagsterEvent(
+        event_type_value="ASSET_OBSERVATION",
+        pipeline_name="{job_name}",
+        solid_handle=op_handle,
+        event_specific_data=AssetObservationData(notebook_succeeded_observation),
+    )
 
-# """
+    yield_event(event)
+"""
 
 
                 nb_no_parameters = copy.deepcopy(nb)
@@ -179,29 +181,36 @@ display(
                 # Hide the injected parameters cell source by default
                 newcell.metadata.setdefault("jupyter", {})["source_hidden"] = True
 
-                # endcell_1 = nbformat.v4.new_code_cell(source=end_template_1)
-                # endcell_2 = nbformat.v4.new_code_cell(source=end_template_2)
+                endcell = nbformat.v4.new_code_cell(source=end_template_1)
+                endcell.metadata["tags"] = ["injected-cleanup"]
 
                 param_cell_index = _find_first_tagged_cell_index(nb_no_parameters, "parameters")
                 injected_cell_index = _find_first_tagged_cell_index(
                     nb_no_parameters, "injected-parameters"
                 )
+
+                injected_cell_cleanup_index = _find_first_tagged_cell_index(
+                    nb_no_parameters, "injected-cleanup"
+                )
+                if injected_cell_cleanup_index >= 0:
+                    after_cell_end = injected_cell_cleanup_index
+                else:
+                    after_cell_end = len(nb_no_parameters.cells)
                 if injected_cell_index >= 0:
                     # Replace the injected cell with a new version
                     before = nb_no_parameters.cells[:injected_cell_index]
-                    after = nb_no_parameters.cells[injected_cell_index + 1 :]
+                    after = nb_no_parameters.cells[injected_cell_index + 1 : after_cell_end]
                     check.int_value_param(param_cell_index, -1, "param_cell_index")
                     # We should have blown away the parameters cell if there is an injected-parameters cell
                 elif param_cell_index >= 0:
                     # Replace the parameter cell with the injected-parameters cell
                     before = nb_no_parameters.cells[:param_cell_index]
-                    after = nb_no_parameters.cells[param_cell_index + 1 :]
+                    after = nb_no_parameters.cells[param_cell_index + 1 : after_cell_end]
                 else:
                     # Inject to the top of the notebook, presumably first cell includes dagstermill import
                     before = []
-                    after = nb_no_parameters.cells
-                # nb_no_parameters.cells = before + [newcell] + after + [endcell_1, endcell_2]
-                nb_no_parameters.cells = before + [newcell] + after 
+                    after = nb_no_parameters.cells[: after_cell_end]
+                nb_no_parameters.cells = before + [newcell] + after + [endcell] 
 
 
                 write_ipynb(nb_no_parameters, parameterized_notebook_path)
@@ -353,3 +362,45 @@ def define_noteable_dagster_asset(
             notebook_url=notebook_url,
         )
     )
+
+
+async def get_notebook(client, notebook_id):
+    return await client.get_notebook(notebook_id)
+
+
+@op(
+    config_schema={"notebook_id": str}
+)
+async def read_events_from_notebook(context):
+    # this ops reads in an executed notebook and yields out any events in the notebook
+
+    # connect to noteable
+    client = NoteableClient()
+
+    with tempfile.TemporaryDirectory() as output_notebook_dir:
+        # read the notebook
+        prefix = str(uuid.uuid4())
+        parameterized_notebook_path = os.path.join(
+            output_notebook_dir, f"{prefix}-inter.ipynb"
+        )
+        nb = await get_notebook(client, context.op_config["notebook_id"])
+        write_ipynb(nb, parameterized_notebook_path)
+
+        # yield events
+        # deferred import for perf
+        # import scrapbook
+
+        # output_nb = scrapbook.read_notebook(executed_notebook_path)
+
+        # for key, value in output_nb.scraps.items():
+        #     if key.startswith("event-"):
+        #         with open(value.data, "rb") as fd:
+        #             event = pickle.loads(fd.read())
+        #             if isinstance(event, (Failure, RetryRequested)):
+        #                 pass
+        #             else:
+        #                 yield event
+
+@job
+def sync_noteable_notebook_events():
+    read_events_from_notebook()
