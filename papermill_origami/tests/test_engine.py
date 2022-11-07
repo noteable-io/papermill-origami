@@ -60,7 +60,7 @@ async def test_sync_noteable_nb_with_papermill(file, file_content, mocker, notea
         file=mocker.Mock(),
         noteable_nb=file_content,
         papermill_nb=papermill_nb,
-        dagster_logger=logging.getLogger(__name__),
+        ext_logger=logging.getLogger(__name__),
     )
 
     noteable_engine.km.client.delete_cell.assert_called_with(ANY, deleted_cell['id'])
