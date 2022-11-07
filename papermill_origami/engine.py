@@ -15,14 +15,14 @@ from jupyter_client.utils import run_sync
 from nbclient.exceptions import CellExecutionError
 from nbformat import NotebookNode
 from origami.client import NoteableClient, SkipCallback
-from origami.types.files import NotebookFile
-from origami.types.jobs import (
+from origami.defs.files import NotebookFile
+from origami.defs.jobs import (
     CustomerJobDefinitionReferenceInput,
     CustomerJobInstanceReferenceInput,
     JobInstanceAttempt,
     JobInstanceAttemptStatus,
 )
-from origami.types.rtu import (
+from origami.defs.rtu import (
     AppendOutputEventSchema,
     BulkCellStateMessage,
     DisplayHandlerUpdateEventSchema,
