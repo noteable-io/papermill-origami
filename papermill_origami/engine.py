@@ -136,7 +136,7 @@ class NoteableEngine(Engine):
         if not kwargs.get("logger"):
             kwargs["logger"] = logger
 
-        dagster_logger = kwargs["logger"]
+        ext_logger = kwargs["logger"]
 
         dagster_context = kwargs.get("dagster_context")
 
@@ -208,11 +208,11 @@ class NoteableEngine(Engine):
                 solid_handle=dagster_context.op_handle,
                 event_specific_data=AssetObservationData(asset_obs),
             )
-            dagster_logger.log_dagster_event(
+            ext_logger.log_dagster_event(
                 level="INFO", msg="Parameterized notebook available at", dagster_event=event
             )
         else:
-            dagster_logger.info(f"Parameterized notebook available at {parameterized_url}")
+            ext_logger.info(f"Parameterized notebook available at {parameterized_url}")
         # HACK: We need this delay in order to successfully subscribe to the files channel
         #       of the newly created parameterized notebook.
         await asyncio.sleep(1)
@@ -228,7 +228,7 @@ class NoteableEngine(Engine):
                 file=self.file,
                 noteable_nb=noteable_nb,
                 papermill_nb=self.nb,
-                dagster_logger=dagster_logger,
+                ext_logger=ext_logger,
             )
 
             # Sync metadata from papermill to noteable before execution
@@ -251,7 +251,7 @@ class NoteableEngine(Engine):
 
     @ensure_client
     async def sync_noteable_nb_with_papermill(
-        self, file: NotebookFile, noteable_nb, papermill_nb, dagster_logger
+        self, file: NotebookFile, noteable_nb, papermill_nb, ext_logger
     ):
         """Used to sync the cells of in-memory notebook representation that papermill manages with the Noteable notebook
 
@@ -271,7 +271,7 @@ class NoteableEngine(Engine):
             after_id = papermill_nb_cell_ids[idx - 1] if idx > 0 else None
             await self.km.client.add_cell(file, cell=papermill_nb.cells[idx], after_id=after_id)
 
-        dagster_logger.info(
+        ext_logger.info(
             "Synced notebook with Noteable, "
             f"added {len(added_cell_ids)} cells and deleted {len(deleted_cell_ids)} cells"
         )
@@ -294,7 +294,7 @@ class NoteableEngine(Engine):
     @asynccontextmanager
     async def setup_kernel(self, cleanup_kc=True, cleanup_kc_on_error=False, **kwargs) -> Generator:
         """Context manager for setting up the kernel to execute a notebook."""
-        dagster_logger = kwargs["logger"]
+        ext_logger = kwargs["logger"]
 
         if self.km is None:
             # Assumes that file and client are being passed in
@@ -302,10 +302,10 @@ class NoteableEngine(Engine):
 
         # Subscribe to the file or we won't see status updates
         await self.client.subscribe_file(self.km.file, from_version_id=self.file.current_version_id)
-        dagster_logger.info("Subscribed to file")
+        ext_logger.info("Subscribed to file")
 
         await self.km.async_start_kernel(**kwargs)
-        dagster_logger.info("Started kernel")
+        ext_logger.info("Started kernel")
 
         try:
             yield
