@@ -414,14 +414,15 @@ class NoteableEngine(Engine):
                 self._cell_complete(self.nb.cells[index], cell_index=index)
 
         # Update the job instance attempt status based on whether the notebook errored
-        await self.client.update_job_instance(
-            job_instance_attempt_id=self.job_instance_attempt.id,
-            job_instance_attempt_update=JobInstanceAttemptUpdate(
-                status=JobInstanceAttemptStatus.FAILED
-                if errored
-                else JobInstanceAttemptStatus.SUCCEEDED
-            ),
-        )
+        if self.job_instance_attempt:
+            await self.client.update_job_instance(
+                job_instance_attempt_id=self.job_instance_attempt.id,
+                job_instance_attempt_update=JobInstanceAttemptUpdate(
+                    status=JobInstanceAttemptStatus.FAILED
+                    if errored
+                    else JobInstanceAttemptStatus.SUCCEEDED
+                ),
+            )
 
     def _get_timeout(self, cell: Optional[NotebookNode]) -> int:
         """Helper to fetch a timeout as a value or a function to be run against a cell"""
