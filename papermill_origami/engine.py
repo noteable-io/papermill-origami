@@ -154,9 +154,7 @@ class NoteableEngine(Engine):
             else:
                 raise ValueError("No file_id or derivable file_id found")
 
-        job_instance_attempt_request = JobInstanceAttemptRequest.parse_obj(
-            kwargs.get("job_instance_attempt")
-        )
+        job_instance_attempt_request = kwargs.get("job_instance_attempt")
         # Setup job instance attempt from the provided customer job metadata
         if job_metadata := kwargs.get("job_metadata", {}):
             version = await self.client.get_version_or_none(original_notebook_id)
