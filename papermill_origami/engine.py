@@ -162,20 +162,26 @@ class NoteableEngine(Engine):
                 space_id = file.space_id
 
             # 1: Ensure the job definition&instance references exists
-            job_instance = await self.client.create_job_instance(
-                CustomerJobInstanceReferenceInput(
+            customer_job_instance_reference = CustomerJobInstanceReferenceInput(
                     orchestrator_job_instance_id=job_metadata.get('job_instance_id'),
                     orchestrator_job_instance_uri=job_metadata.get('job_instance_uri'),
-                    customer_job_definition_reference=CustomerJobDefinitionReferenceInput(
-                        space_id=space_id,
-                        orchestrator_id=job_metadata.get('orchestrator_id'),
-                        orchestrator_name=job_metadata.get('orchestrator_name'),
-                        orchestrator_uri=job_metadata.get('orchestrator_uri'),
-                        orchestrator_job_definition_id=job_metadata.get('job_definition_id'),
-                        orchestrator_job_definition_uri=job_metadata.get('job_definition_uri'),
-                    ),
-                )
             )
+            if job_metadata.get('customer_job_definition_reference'):
+                # Extract the nested customer_job_definition_reference
+                customer_job_definition_reference_input = job_metadata['customer_job_definition_reference']
+                customer_job_definition_reference = CustomerJobDefinitionReferenceInput(
+                        space_id=space_id,
+                        orchestrator_id=customer_job_definition_reference_input.get('orchestrator_id'),
+                        orchestrator_name=customer_job_definition_reference_input.get('orchestrator_name'),
+                        orchestrator_uri=customer_job_definition_reference_input.get('orchestrator_uri'),
+                        orchestrator_job_definition_id=customer_job_definition_reference_input.get('job_definition_id'),
+                        orchestrator_job_definition_uri=customer_job_definition_reference_input.get('job_definition_uri'),
+                    )
+                customer_job_instance_reference.customer_job_definition_reference = customer_job_definition_reference
+            elif job_metadata.get('customer_job_definition_reference_id'):
+                customer_job_instance_reference.customer_job_definition_reference_id = job_metadata['customer_job_definition_reference_id']
+
+            job_instance = await self.client.create_job_instance(customer_job_instance_reference)
 
             # 2: Set up the job instance attempt
             # TODO: update the job instance attempt status while running/after completion
