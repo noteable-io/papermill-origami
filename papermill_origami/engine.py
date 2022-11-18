@@ -432,10 +432,6 @@ class NoteableEngine(Engine):
                 job_instance_attempt_id=self.job_instance_attempt.id,
                 job_instance_attempt_update=JobInstanceAttemptUpdate(status=status),
             )
-            logger.debug(
-                "Updating job instance attempt id %s to status RUNNING",
-                self.job_instance_attempt.id,
-            )
 
     def _get_timeout(self, cell: Optional[NotebookNode]) -> int:
         """Helper to fetch a timeout as a value or a function to be run against a cell"""
