@@ -19,6 +19,7 @@ from origami.defs.files import NotebookFile
 from origami.defs.jobs import (
     CustomerJobDefinitionReferenceInput,
     CustomerJobInstanceReferenceInput,
+    JobInstanceAttempt,
     JobInstanceAttemptRequest,
     JobInstanceAttemptStatus,
     JobInstanceAttemptUpdate,
@@ -107,7 +108,7 @@ class NoteableEngine(Engine):
         # Currently, this is only used when the output is of type display_data.
         self.__noteable_output_id_cache = {}
         self.file = None
-        self.job_instance_attempt = None
+        self.job_instance_attempt: Optional[JobInstanceAttempt] = None
 
     def catch_cell_metadata_updates(self, func):
         """A decorator for catching cell metadata updates related to papermill
@@ -154,9 +155,11 @@ class NoteableEngine(Engine):
             else:
                 raise ValueError("No file_id or derivable file_id found")
 
-        job_instance_attempt_request = JobInstanceAttemptRequest.parse_obj(
-            kwargs.get('job_instance_attempt')
-        ) if kwargs.get('job_instance_attempt') else None
+        job_instance_attempt_request = (
+            JobInstanceAttemptRequest.parse_obj(kwargs.get('job_instance_attempt'))
+            if kwargs.get('job_instance_attempt')
+            else None
+        )
 
         # Setup job instance attempt from the provided customer job metadata
         if job_metadata := kwargs.get("job_metadata", {}):
@@ -244,7 +247,9 @@ class NoteableEngine(Engine):
 
             # We're going to start executing the notebook; Update the job instance attempt status to RUNNING
             if self.job_instance_attempt:
-                logger.debug(f"Updating job instance attempt id {self.job_instance_attempt.id} to status RUNNING")
+                logger.debug(
+                    f"Updating job instance attempt id {self.job_instance_attempt.id} to status RUNNING"
+                )
                 await self.client.update_job_instance(
                     job_instance_attempt_id=self.job_instance_attempt.id,
                     job_instance_attempt_update=JobInstanceAttemptUpdate(
@@ -417,13 +422,20 @@ class NoteableEngine(Engine):
 
         # Update the job instance attempt status
         if self.job_instance_attempt:
-            status = JobInstanceAttemptStatus.FAILED if errored else JobInstanceAttemptStatus.SUCCEEDED
-            logger.debug(f"Updating job instance attempt id {self.job_instance_attempt.id} to status {status}")
+            status = (
+                JobInstanceAttemptStatus.FAILED if errored else JobInstanceAttemptStatus.SUCCEEDED
+            )
+            logger.debug(
+                f"Updating job instance attempt id {self.job_instance_attempt.id} to status {status}"
+            )
             await self.client.update_job_instance(
                 job_instance_attempt_id=self.job_instance_attempt.id,
                 job_instance_attempt_update=JobInstanceAttemptUpdate(status=status),
             )
-            logger.debug("Updating job instance attempt id %s to status RUNNING", self.job_instance_attempt.id)
+            logger.debug(
+                "Updating job instance attempt id %s to status RUNNING",
+                self.job_instance_attempt.id,
+            )
 
     def _get_timeout(self, cell: Optional[NotebookNode]) -> int:
         """Helper to fetch a timeout as a value or a function to be run against a cell"""
