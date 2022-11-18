@@ -415,7 +415,7 @@ class NoteableEngine(Engine):
             finally:
                 self._cell_complete(self.nb.cells[index], cell_index=index)
 
-        # Update the job instance attempt status based on whether the notebook errored
+        # Update the job instance attempt status
         if self.job_instance_attempt:
             status = JobInstanceAttemptStatus.FAILED if errored else JobInstanceAttemptStatus.SUCCEEDED
             logger.debug(f"Updating job instance attempt id {self.job_instance_attempt.id} to status {status}")
