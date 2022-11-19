@@ -20,7 +20,9 @@ from origami.defs.jobs import (
     CustomerJobDefinitionReferenceInput,
     CustomerJobInstanceReferenceInput,
     JobInstanceAttempt,
+    JobInstanceAttemptRequest,
     JobInstanceAttemptStatus,
+    JobInstanceAttemptUpdate,
 )
 from origami.defs.rtu import (
     AppendOutputEventSchema,
@@ -106,6 +108,7 @@ class NoteableEngine(Engine):
         # Currently, this is only used when the output is of type display_data.
         self.__noteable_output_id_cache = {}
         self.file = None
+        self.job_instance_attempt: Optional[JobInstanceAttempt] = None
 
     def catch_cell_metadata_updates(self, func):
         """A decorator for catching cell metadata updates related to papermill
@@ -152,7 +155,13 @@ class NoteableEngine(Engine):
             else:
                 raise ValueError("No file_id or derivable file_id found")
 
-        job_instance_attempt = kwargs.get("job_instance_attempt")
+        job_instance_attempt_request = (
+            JobInstanceAttemptRequest.parse_obj(kwargs.get('job_instance_attempt'))
+            if kwargs.get('job_instance_attempt')
+            else None
+        )
+
+        # Setup job instance attempt from the provided customer job metadata
         if job_metadata := kwargs.get("job_metadata", {}):
             version = await self.client.get_version_or_none(original_notebook_id)
             if version is not None:
@@ -161,7 +170,7 @@ class NoteableEngine(Engine):
                 file = await self.client.get_notebook(original_notebook_id)
                 space_id = file.space_id
 
-            # 1: Ensure the job definition&instance references exists
+            # 1: Ensure the job definition and instance references exists
             job_instance = await self.client.create_job_instance(
                 CustomerJobInstanceReferenceInput(
                     orchestrator_job_instance_id=job_metadata.get('job_instance_id'),
@@ -179,16 +188,18 @@ class NoteableEngine(Engine):
 
             # 2: Set up the job instance attempt
             # TODO: update the job instance attempt status while running/after completion
-            job_instance_attempt = JobInstanceAttempt(
+            job_instance_attempt_request = JobInstanceAttemptRequest(
                 status=JobInstanceAttemptStatus.CREATED,
                 attempt_number=0,
                 customer_job_instance_reference_id=job_instance.id,
             )
 
         # Create the parameterized_notebook
-        self.file = await self.client.create_parameterized_notebook(
-            original_notebook_id, job_instance_attempt=job_instance_attempt
+        resp = await self.client.create_parameterized_notebook(
+            original_notebook_id, job_instance_attempt=job_instance_attempt_request
         )
+        self.file = resp.parameterized_notebook
+        self.job_instance_attempt = resp.job_instance_attempt
         parameterized_url = f"https://{self.client.config.domain}/f/{self.file.id}"
 
         self.nb.metadata["executed_notebook_url"] = parameterized_url
@@ -233,6 +244,18 @@ class NoteableEngine(Engine):
 
             # Sync metadata from papermill to noteable before execution
             await self.sync_noteable_nb_metadata_with_papermill()
+
+            # We're going to start executing the notebook; Update the job instance attempt status to RUNNING
+            if self.job_instance_attempt:
+                logger.debug(
+                    f"Updating job instance attempt id {self.job_instance_attempt.id} to status RUNNING"
+                )
+                await self.client.update_job_instance(
+                    job_instance_attempt_id=self.job_instance_attempt.id,
+                    job_instance_attempt_update=JobInstanceAttemptUpdate(
+                        status=JobInstanceAttemptStatus.RUNNING
+                    ),
+                )
 
             await self.papermill_execute_cells()
 
@@ -384,6 +407,7 @@ class NoteableEngine(Engine):
         )
 
         # Execute each cell and update the output in real time.
+        errored = False
         for index, cell in enumerate(self.nb.cells):
             try:
                 self._cell_start(cell, index)
@@ -391,9 +415,23 @@ class NoteableEngine(Engine):
             except CellExecutionError as ex:
                 # TODO: Make sure we raise these
                 self._cell_exception(self.nb.cells[index], index, exception=ex)
+                errored = True
                 break
             finally:
                 self._cell_complete(self.nb.cells[index], cell_index=index)
+
+        # Update the job instance attempt status
+        if self.job_instance_attempt:
+            status = (
+                JobInstanceAttemptStatus.FAILED if errored else JobInstanceAttemptStatus.SUCCEEDED
+            )
+            logger.debug(
+                f"Updating job instance attempt id {self.job_instance_attempt.id} to status {status}"
+            )
+            await self.client.update_job_instance(
+                job_instance_attempt_id=self.job_instance_attempt.id,
+                job_instance_attempt_update=JobInstanceAttemptUpdate(status=status),
+            )
 
     def _get_timeout(self, cell: Optional[NotebookNode]) -> int:
         """Helper to fetch a timeout as a value or a function to be run against a cell"""

@@ -22,8 +22,10 @@ def mock_noteable_client(mocker, file):
     mock_noteable_client = mocker.patch(
         'papermill_origami.engine.NoteableClient', return_value=mocker.AsyncMock()
     )
+    create_resp = mocker.Mock()
+    create_resp.parameterized_notebook = file
     mock_noteable_client.return_value.__aenter__.return_value.create_parameterized_notebook.return_value = (
-        file
+        create_resp
     )
 
 
