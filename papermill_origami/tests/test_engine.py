@@ -24,7 +24,9 @@ def mock_noteable_client(mocker, file):
     )
     create_resp = mocker.Mock()
     create_resp.parameterized_notebook = file
-    mock_noteable_client.return_value.__aenter__.return_value.create_parameterized_notebook.return_value = create_resp
+    mock_noteable_client.return_value.__aenter__.return_value.create_parameterized_notebook.return_value = (
+        create_resp
+    )
 
 
 @pytest.fixture
