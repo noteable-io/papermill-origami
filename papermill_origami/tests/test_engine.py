@@ -370,7 +370,6 @@ class TestDeleteKernelSession:
         await noteable_engine.execute(
             file_id='fake_id',
             noteable_nb=file_content,
-            logger=logging.getLogger(__name__),
         )
 
         noteable_engine.client.delete_kernel_session.assert_called_once()
@@ -391,7 +390,6 @@ class TestDeleteKernelSession:
         await noteable_engine.execute(
             file_id='fake_id',
             noteable_nb=file_content,
-            logger=logging.getLogger(__name__),
         )
 
         # Assert that the kernel session was not deleted
