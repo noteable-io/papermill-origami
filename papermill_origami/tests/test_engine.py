@@ -6,6 +6,7 @@ from unittest.mock import ANY
 
 import nbformat
 import pytest
+from nbclient.exceptions import CellExecutionError
 from origami.defs.rtu import (
     CellStateMessageData,
     KernelOutput,
@@ -19,14 +20,23 @@ from papermill_origami.util import parse_noteable_file_id
 
 @pytest.fixture
 def mock_noteable_client(mocker, file):
-    mock_noteable_client = mocker.patch(
+    patch_async_noteable_client = mocker.patch(
         'papermill_origami.engine.NoteableClient', return_value=mocker.AsyncMock()
     )
     create_resp = mocker.Mock()
     create_resp.parameterized_notebook = file
-    mock_noteable_client.return_value.__aenter__.return_value.create_parameterized_notebook.return_value = (
+    # This is done to mock the interactions with async context manager usage of NoteableClient
+    patch_async_noteable_client.return_value.__aenter__.return_value.create_parameterized_notebook.return_value = (
         create_resp
     )
+
+    # Return a mock client to be used by the NoteableEngine
+    client = mocker.Mock()
+    client.subscribe_file = mocker.AsyncMock()
+    client.update_job_instance = mocker.AsyncMock()
+    client.delete_kernel_session = mocker.AsyncMock()
+    client.create_parameterized_notebook = mocker.AsyncMock(return_value=create_resp)
+    return client
 
 
 @pytest.fixture
@@ -40,7 +50,9 @@ def noteable_engine(mocker, file, file_content, mock_noteable_client):
     execute_result = mocker.Mock()
     execute_result.state.is_error_state = False
 
-    noteable_engine = NoteableEngine(nb_man=mock_nb_man, km=mocker.AsyncMock(), client=None)
+    noteable_engine = NoteableEngine(
+        nb_man=mock_nb_man, km=mocker.AsyncMock(), client=mock_noteable_client
+    )
 
     # Set the execution result to successful
     noteable_engine.km.client.execute.return_value = execute_result
@@ -348,3 +360,39 @@ async def test_update_execution_count_callback(mocker, noteable_engine):
 
     assert noteable_engine.nb.cells[0].execution_count == 0
     assert noteable_engine.nb.cells[1].execution_count == 1
+
+
+@pytest.mark.asyncio
+class TestDeleteKernelSession:
+    async def test_kernel_session_is_deleted_after_successful_execution(
+        self, file_content, noteable_engine
+    ):
+        await noteable_engine.execute(
+            file_id='fake_id',
+            noteable_nb=file_content,
+            logger=logging.getLogger(__name__),
+        )
+
+        noteable_engine.client.delete_kernel_session.assert_called_once()
+
+    async def test_kernel_session_is_not_deleted_after_failed_execution(
+        self, mocker, file_content, noteable_engine
+    ):
+        noteable_engine.async_execute_cell = mocker.AsyncMock(
+            side_effect=[
+                # Let the first 9 cells execute successfully
+                *([None] * 9),
+                # Throw a CellExecutionError from the last cell
+                CellExecutionError(
+                    traceback='fake traceback', evalue='fake evalue', ename='fake ename'
+                ),
+            ]
+        )
+        await noteable_engine.execute(
+            file_id='fake_id',
+            noteable_nb=file_content,
+            logger=logging.getLogger(__name__),
+        )
+
+        # Assert that the kernel session was not deleted
+        noteable_engine.client.delete_kernel_session.assert_not_called()
