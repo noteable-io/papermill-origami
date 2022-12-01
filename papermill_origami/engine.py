@@ -411,7 +411,6 @@ class NoteableEngine(Engine):
         for index, cell in enumerate(self.nb.cells):
             try:
                 self._cell_start(cell, index)
-                print(f"Executing cell {index}")
                 await self.async_execute_cell(cell, index)
             except CellExecutionError as ex:
                 # TODO: Make sure we raise these
