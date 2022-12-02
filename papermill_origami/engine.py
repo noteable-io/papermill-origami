@@ -444,6 +444,11 @@ class NoteableEngine(Engine):
                 job_instance_attempt_update=JobInstanceAttemptUpdate(status=status),
             )
 
+        if not errored:
+            # Delete the kernel session
+            logger.debug("Deleting kernel session for file id %s", self.file.id)
+            await self.client.delete_kernel_session(self.file)
+
     def _get_timeout(self, cell: Optional[NotebookNode]) -> int:
         """Helper to fetch a timeout as a value or a function to be run against a cell"""
         if self.timeout_func is not None and cell is not None:
