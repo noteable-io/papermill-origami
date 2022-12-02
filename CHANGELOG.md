@@ -6,6 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Mark job instance attempt failed when any uncaught exception is thrown (including connecting to the kernel)
 - Added origami client call to delete the active kernel session after successful notebook execution
 
 ## [0.0.11] - 2022-11-18
