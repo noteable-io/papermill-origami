@@ -228,47 +228,58 @@ class NoteableEngine(Engine):
         #       of the newly created parameterized notebook.
         await asyncio.sleep(1)
 
-        async with self.setup_kernel(file=self.file, client=self.client, **kwargs):
-            noteable_nb = nbformat.reads(
-                self.file.content
-                if isinstance(self.file.content, str)
-                else json.dumps(self.file.content),
-                as_version=4,
-            )
-            await self.sync_noteable_nb_with_papermill(
-                file=self.file,
-                noteable_nb=noteable_nb,
-                papermill_nb=self.nb,
-                ext_logger=ext_logger,
-            )
-
-            # Sync metadata from papermill to noteable before execution
-            await self.sync_noteable_nb_metadata_with_papermill()
-
-            # We're going to start executing the notebook; Update the job instance attempt status to RUNNING
-            if self.job_instance_attempt:
-                logger.debug(
-                    f"Updating job instance attempt id {self.job_instance_attempt.id} to status RUNNING"
+        try:
+            async with self.setup_kernel(file=self.file, client=self.client, **kwargs):
+                noteable_nb = nbformat.reads(
+                    self.file.content
+                    if isinstance(self.file.content, str)
+                    else json.dumps(self.file.content),
+                    as_version=4,
                 )
+                await self.sync_noteable_nb_with_papermill(
+                    file=self.file,
+                    noteable_nb=noteable_nb,
+                    papermill_nb=self.nb,
+                    ext_logger=ext_logger,
+                )
+
+                # Sync metadata from papermill to noteable before execution
+                await self.sync_noteable_nb_metadata_with_papermill()
+
+                # We're going to start executing the notebook; Update the job instance attempt status to RUNNING
+                if self.job_instance_attempt:
+                    logger.debug(
+                        f"Updating job instance attempt id {self.job_instance_attempt.id} to status RUNNING"
+                    )
+                    await self.client.update_job_instance(
+                        job_instance_attempt_id=self.job_instance_attempt.id,
+                        job_instance_attempt_update=JobInstanceAttemptUpdate(
+                            status=JobInstanceAttemptStatus.RUNNING
+                        ),
+                    )
+
+                await self.papermill_execute_cells()
+
+                # This is a hack to ensure we have the client in session to send nb metadata
+                # updates over RTU after execution.
+                self.nb_man.notebook_complete()
+                await self.sync_noteable_nb_metadata_with_papermill()
+
+                # Override the notebook_complete method and set it to a no-op (since we already called it)
+                self.nb_man.notebook_complete = lambda: None
+
+                # info_msg = self.wait_for_reply(self.kc.kernel_info())
+                # self.nb.metadata['language_info'] = info_msg['content']['language_info']
+        except:  # noqa
+            logger.exception("Error executing notebook")
+            if self.job_instance_attempt:
                 await self.client.update_job_instance(
                     job_instance_attempt_id=self.job_instance_attempt.id,
                     job_instance_attempt_update=JobInstanceAttemptUpdate(
-                        status=JobInstanceAttemptStatus.RUNNING
+                        status=JobInstanceAttemptStatus.FAILED
                     ),
                 )
-
-            await self.papermill_execute_cells()
-
-            # This is a hack to ensure we have the client in session to send nb metadata
-            # updates over RTU after execution.
-            self.nb_man.notebook_complete()
-            await self.sync_noteable_nb_metadata_with_papermill()
-
-            # Override the notebook_complete method and set it to a no-op (since we already called it)
-            self.nb_man.notebook_complete = lambda: None
-
-            # info_msg = self.wait_for_reply(self.kc.kernel_info())
-            # self.nb.metadata['language_info'] = info_msg['content']['language_info']
+            raise
 
         return self.nb
 
