@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.0.13] - 2022-12-07
+### Added
+- Added prefect-jupyter dependency
+
 ## [0.0.12] - 2022-12-02
 ### Added
 - Mark job instance attempt failed when any uncaught exception is thrown (including connecting to the kernel)
