@@ -33,7 +33,7 @@
     with DAG("example_noteable_airflow", start_date=datetime.now()):
         noteable_task = NoteablePapermillOperator(
             task_id="noteable-papermill-task",
-            notebook_path="https://app.noteable-integration.us/f/f78d668e-13f3-49da-84a9-afdece1b1e2a",
+            notebook_path="https://app.noteable.io/f/f78d668e-13f3-49da-84a9-afdece1b1e2a",
             parameters={"foo": "hello world this is running from airflow"},
         )
     ```
