@@ -42,7 +42,6 @@ flytekit = {version = "^1.2.1", optional = true}
 flytekitplugins-papermill = {version = "^1.2.1", optional = true}
 apache-airflow = { version = "^2.4.2", optional = true }
 prefect = { version = "^2.7.0", optional = true }
-greenlet = { version = "^2.0.1", optional = true }
 
 [tool.poetry.dev-dependencies]
 flake8-docstrings = "^1.6.0"
@@ -63,7 +62,7 @@ bump2version = "^1.0.1"
 dagster = ["dagstermill"]
 flyte = ["flytekit", "flytekitplugins-papermill"]
 airflow = ["apache-airflow"]
-prefect = ["prefect", "greenlet"]
+prefect = ["prefect"]
 
 [tool.poetry.plugins."papermill.io"]
 "noteable://" = "papermill_origami.iorw:NoteableHandler"
