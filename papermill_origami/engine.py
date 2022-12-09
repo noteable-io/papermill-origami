@@ -443,7 +443,7 @@ class NoteableEngine(Engine):
             logger.debug("Deleting kernel session for file id %s", self.file.id)
             try:
                 await self.client.delete_kernel_session(self.file)
-            except httpx.ReadTimeout as e:
+            except httpx.ReadTimeout:
                 logger.warning(
                     "Timed out while deleting kernel session for file id %s",
                     self.file.id,
