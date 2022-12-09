@@ -2,7 +2,6 @@
 
 It enables papermill to run notebooks against Noteable as though it were executing a notebook locally.
 """
-import asyncio
 import functools
 import json
 import logging
