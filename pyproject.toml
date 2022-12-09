@@ -46,7 +46,7 @@ prefect-jupyter = { version = "^0.2.0", optional = true }
 [tool.poetry.dev-dependencies]
 flake8-docstrings = "^1.6.0"
 pytest-httpx = "^0.21.0"
-black = {version = "^22.3.0", allow-prereleases = true}
+black = {version = "^22.12.0", allow-prereleases = true}
 isort = "^5.10.1"
 boto = "^2.49.0"
 notebook = "^6.4.11"
