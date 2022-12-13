@@ -2,13 +2,13 @@
 
 It enables papermill to run notebooks against Noteable as though it were executing a notebook locally.
 """
-import asyncio
 import functools
 import json
 import logging
 from contextlib import asynccontextmanager
 from typing import Generator, Optional
 
+import httpx
 import nbformat
 import orjson
 from jupyter_client.utils import run_sync
@@ -224,9 +224,6 @@ class NoteableEngine(Engine):
             )
         else:
             ext_logger.info(f"Parameterized notebook available at {parameterized_url}")
-        # HACK: We need this delay in order to successfully subscribe to the files channel
-        #       of the newly created parameterized notebook.
-        await asyncio.sleep(1)
 
         try:
             async with self.setup_kernel(file=self.file, client=self.client, **kwargs):
@@ -333,10 +330,6 @@ class NoteableEngine(Engine):
         if self.km is None:
             # Assumes that file and client are being passed in
             self.km = self.create_kernel_manager(**kwargs)
-
-        # Subscribe to the file or we won't see status updates
-        await self.client.subscribe_file(self.km.file, from_version_id=self.file.current_version_id)
-        ext_logger.info("Subscribed to file")
 
         await self.km.async_start_kernel(**kwargs)
         ext_logger.info("Started kernel")
@@ -447,7 +440,13 @@ class NoteableEngine(Engine):
         if not errored:
             # Delete the kernel session
             logger.debug("Deleting kernel session for file id %s", self.file.id)
-            await self.client.delete_kernel_session(self.file)
+            try:
+                await self.client.delete_kernel_session(self.file)
+            except httpx.ReadTimeout:
+                logger.warning(
+                    "Timed out while deleting kernel session for file id %s",
+                    self.file.id,
+                )
 
     def _get_timeout(self, cell: Optional[NotebookNode]) -> int:
         """Helper to fetch a timeout as a value or a function to be run against a cell"""
