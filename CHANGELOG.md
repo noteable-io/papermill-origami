@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [0.0.14] - 2022-12-13
+### Fixed
+- Catch httpx.ReadTimeout error when trying to delete the kernel session -- if we're trying to delete the kernel session, it means the run has succeeded.
+
+### Removed
+- Remove the asyncio.sleep right before setup_kernel, which was needed since we tried to RTU subscribe to a file as soon as the parameterized notebook was created.
+- Remove the redundant subscribe_file call -- we already subscribe to the file when trying to launch a new kernel (in origami.client.NoteableClient.get_or_launch_kernel_session)
 
 ## [0.0.13] - 2022-12-07
 ### Added
