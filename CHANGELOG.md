@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [0.0.15] - 2022-12-13
+## Changed
+- Changed dagster `SolidExecutionContext` to `OpExecutionContext`
+- Upgraded dagstermill to `0.17.6`
+
 ## [0.0.14] - 2022-12-13
 ### Fixed
 - Catch httpx.ReadTimeout error when trying to delete the kernel session -- if we're trying to delete the kernel session, it means the run has succeeded.
