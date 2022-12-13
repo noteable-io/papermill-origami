@@ -36,7 +36,7 @@ url = "https://pypi.org"
 python = "^3.8"
 noteable-origami = "^0.0.16"
 papermill = "^2.4.0"
-dagstermill = {version = "^0.17.5", optional = true}
+dagstermill = {version = "^0.17.6", optional = true}
 cloudpickle = "^2.2.0"
 flytekit = {version = "^1.2.1", optional = true}
 flytekitplugins-papermill = {version = "^1.2.1", optional = true}
