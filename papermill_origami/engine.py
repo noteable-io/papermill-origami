@@ -2,6 +2,7 @@
 
 It enables papermill to run notebooks against Noteable as though it were executing a notebook locally.
 """
+import asyncio
 import functools
 import json
 import logging
@@ -224,6 +225,10 @@ class NoteableEngine(Engine):
             )
         else:
             ext_logger.info(f"Parameterized notebook available at {parameterized_url}")
+
+        # Temporarily sleep for 1s to wait for file to be available to be subscribed to.
+        # TODO: remove this once Noteable API fix is deployed to prod.
+        await asyncio.sleep(1)
 
         try:
             async with self.setup_kernel(file=self.file, client=self.client, **kwargs):
