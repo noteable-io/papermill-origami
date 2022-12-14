@@ -5,6 +5,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.0.16] - 2022-12-14
+### Changed
+- Added back `asyncio.sleep` before connecting to Noteable (temporarily, until our API fix is deployed to prod)
+
 ## [0.0.15] - 2022-12-13
 ## Changed
 - Changed dagster `SolidExecutionContext` to `OpExecutionContext`
