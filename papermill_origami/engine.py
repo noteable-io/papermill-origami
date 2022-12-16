@@ -452,6 +452,13 @@ class NoteableEngine(Engine):
                     "Timed out while deleting kernel session for file id %s",
                     self.file.id,
                 )
+            except httpx.HTTPStatusError as e:
+                # Ignore any HTTP errors that occur while deleting the kernel session
+                logger.warning(
+                    "Failed to delete kernel session for file id %s. Error: %s",
+                    self.file.id,
+                    e,
+                )
 
     def _get_timeout(self, cell: Optional[NotebookNode]) -> int:
         """Helper to fetch a timeout as a value or a function to be run against a cell"""

@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime
 from unittest.mock import ANY
 
+import httpx
 import nbformat
 import pytest
 from nbclient.exceptions import CellExecutionError
@@ -394,3 +395,22 @@ class TestDeleteKernelSession:
 
         # Assert that the kernel session was not deleted
         noteable_engine.client.delete_kernel_session.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "exception",
+        [
+            httpx.ReadTimeout("fake message"),
+            httpx.HTTPStatusError("fake message", request=None, response=None),
+        ],
+    )
+    async def test_catch_delete_kernel_session_errors(
+        self, file_content, noteable_engine, exception
+    ):
+        noteable_engine.client.delete_kernel_session.side_effect = exception
+        try:
+            await noteable_engine.execute(
+                file_id='fake_id',
+                noteable_nb=file_content,
+            )
+        except exception.__class__:
+            pytest.fail("papermill_execute_cells should catch delete_kernel_session errors")
