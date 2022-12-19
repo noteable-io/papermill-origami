@@ -320,7 +320,11 @@ class NoteableEngine(Engine):
         for key, value in flatten_dict(
             self.nb.metadata.papermill, parent_key_tuple=("papermill",)
         ).items():
-            await self.km.client.update_nb_metadata(self.file, {"path": key, "value": value})
+            try:
+                await self.km.client.update_nb_metadata(self.file, {"path": key, "value": value})
+            except asyncio.exceptions.TimeoutError:
+                logger.debug("Timeout error while updating notebook metadata")
+                pass
 
     @staticmethod
     def create_kernel_manager(file: NotebookFile, client: NoteableClient, **kwargs):
@@ -358,9 +362,13 @@ class NoteableEngine(Engine):
     def _cell_exception(self, cell, cell_index=None, **kwargs):
         self.catch_cell_metadata_updates(self.nb_man.cell_exception)(cell, cell_index, **kwargs)
         # Manually update the Noteable nb metadata
-        run_sync(self.km.client.update_nb_metadata)(
-            self.file, {"path": ["papermill", "exception"], "value": True}
-        )
+        try:
+            run_sync(self.km.client.update_nb_metadata)(
+                self.file, {"path": ["papermill", "exception"], "value": True}
+            )
+        except asyncio.exceptions.TimeoutError:
+            logger.debug("Timeout error while updating notebook metadata")
+            pass
 
     def _cell_complete(self, cell, cell_index=None, **kwargs):
         self.catch_cell_metadata_updates(self.nb_man.cell_complete)(cell, cell_index, **kwargs)
