@@ -47,7 +47,7 @@ prefect-jupyter = { version = "^0.2.0", optional = true }
 flake8-docstrings = "^1.6.0"
 pytest-httpx = "^0.21.0"
 black = {version = "^22.3.0", allow-prereleases = true}
-isort = "^5.10.1"
+isort = "^5.11.3"
 boto = "^2.49.0"
 notebook = "^6.4.11"
 pytest = "^7.1.2"
