@@ -372,7 +372,7 @@ class NoteableEngine(Engine):
                 self.file, {"path": ["papermill", "exception"], "value": True}
             )
         except (asyncio.exceptions.TimeoutError, websockets.exceptions.ConnectionClosedError):
-            logger.debug("Timeout error while updating notebook metadata")
+            logger.debug("Encountered an error while updating notebook metadata")
             pass
 
     def _cell_complete(self, cell, cell_index=None, **kwargs):
