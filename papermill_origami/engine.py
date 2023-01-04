@@ -12,6 +12,7 @@ from typing import Generator, Optional
 import httpx
 import nbformat
 import orjson
+import websockets.exceptions
 from jupyter_client.utils import run_sync
 from nbclient.exceptions import CellExecutionError
 from nbformat import NotebookNode
@@ -124,11 +125,18 @@ class NoteableEngine(Engine):
             for key, value in flatten_dict(
                 cell.metadata.papermill, parent_key_tuple=("papermill",)
             ).items():
-                run_sync(self.km.client.update_cell_metadata)(
-                    file=self.file,
-                    cell_id=cell.id,
-                    metadata_update_properties={"path": key, "value": value},
-                )
+                try:
+                    run_sync(self.km.client.update_cell_metadata)(
+                        file=self.file,
+                        cell_id=cell.id,
+                        metadata_update_properties={"path": key, "value": value},
+                    )
+                except (
+                    asyncio.exceptions.TimeoutError,
+                    websockets.exceptions.ConnectionClosedError,
+                ):
+                    logger.debug("Encountered an error while updating cell metadata")
+                    pass
             return ret_val
 
         return wrapper
@@ -322,8 +330,8 @@ class NoteableEngine(Engine):
         ).items():
             try:
                 await self.km.client.update_nb_metadata(self.file, {"path": key, "value": value})
-            except asyncio.exceptions.TimeoutError:
-                logger.debug("Timeout error while updating notebook metadata")
+            except (asyncio.exceptions.TimeoutError, websockets.exceptions.ConnectionClosedError):
+                logger.debug("Encountered an error while updating notebook metadata")
                 pass
 
     @staticmethod
@@ -366,8 +374,8 @@ class NoteableEngine(Engine):
             run_sync(self.km.client.update_nb_metadata)(
                 self.file, {"path": ["papermill", "exception"], "value": True}
             )
-        except asyncio.exceptions.TimeoutError:
-            logger.debug("Timeout error while updating notebook metadata")
+        except (asyncio.exceptions.TimeoutError, websockets.exceptions.ConnectionClosedError):
+            logger.debug("Encountered an error while updating notebook metadata")
             pass
 
     def _cell_complete(self, cell, cell_index=None, **kwargs):
