@@ -131,7 +131,10 @@ class NoteableEngine(Engine):
                         cell_id=cell.id,
                         metadata_update_properties={"path": key, "value": value},
                     )
-                except (asyncio.exceptions.TimeoutError, websockets.exceptions.ConnectionClosedError):
+                except (
+                    asyncio.exceptions.TimeoutError,
+                    websockets.exceptions.ConnectionClosedError,
+                ):
                     logger.debug("Encountered an error while updating cell metadata")
                     pass
             return ret_val
