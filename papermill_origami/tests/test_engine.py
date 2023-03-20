@@ -1,5 +1,6 @@
 import copy
 import logging
+import sys
 import uuid
 from datetime import datetime
 from unittest.mock import ANY
@@ -414,3 +415,27 @@ class TestDeleteKernelSession:
             )
         except exception.__class__:
             pytest.fail("papermill_execute_cells should catch delete_kernel_session errors")
+
+
+async def test_tqdm_pbar_is_overriden(mocker):
+    from tqdm.auto import tqdm
+
+    from papermill_origami.engine import (  # avoid circular import due to papermill engine registration
+        NoteableEngine,
+    )
+
+    mock_nb_man = mocker.Mock()
+
+    # Test that the default progress bar file is sys.stderr
+    mock_nb_man.pbar = tqdm(total=1)
+    assert mock_nb_man.pbar.fp == sys.stderr
+
+    mock_nb_man.nb.cells = ["fake cell"]
+
+    # Test that the progress bar file is overridden to sys.stdout
+    noteable_engine = NoteableEngine(
+        nb_man=mock_nb_man,
+        override_progress_bar=True,
+    )
+
+    assert noteable_engine.nb_man.pbar.fp == sys.stdout

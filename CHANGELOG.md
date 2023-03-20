@@ -5,6 +5,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [0.0.23] - 2022-03-17
+- `NoteableEngine` accepts new kwarg `override_progress_bar` to override the default progress bar and set the `tqdm` instance to log to `stdout` instead of the default `stderr`. 
+
 ## [0.0.22] - 2022-03-14
 - Upgrade noteable-origami to 0.0.21
 

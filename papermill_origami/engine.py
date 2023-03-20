@@ -6,6 +6,7 @@ import asyncio
 import functools
 import json
 import logging
+import sys
 from contextlib import asynccontextmanager
 from typing import Generator, Optional
 
@@ -111,6 +112,15 @@ class NoteableEngine(Engine):
         self.__noteable_output_id_cache = {}
         self.file = None
         self.job_instance_attempt: Optional[JobInstanceAttempt] = None
+
+        if kw.get("override_progress_bar", False):
+            from tqdm.auto import tqdm
+
+            # https://github.com/nteract/papermill/blob/54f6c038cdae0c70d5fb04691fa465e12aeb62cb/papermill/engines.py#L114 # noqa: E501
+            # file is set to stderr by default, but we want to use stdout, so we override it here
+            self.nb_man.pbar = tqdm(
+                total=len(self.nb.cells), unit="cell", desc="Executing", file=sys.stdout
+            )
 
     def catch_cell_metadata_updates(self, func):
         """A decorator for catching cell metadata updates related to papermill
