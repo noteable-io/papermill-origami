@@ -2448,7 +2448,7 @@ python-versions = ">=3.5"
 
 [[package]]
 name = "noteable-origami"
-version = "0.0.22"
+version = "0.0.23"
 description = "The Noteable API interface"
 category = "main"
 optional = false
@@ -4062,7 +4062,7 @@ prefect = ["prefect-jupyter"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "61635218785a4a7a68491eb78ea6222fae9c9398ad9dd12e3167378540b5df48"
+content-hash = "d80e2a1e61ab0764745f74fdffed9ee290ba6960ecc2be3f55877c334294d4e9"
 
 [metadata.files]
 aiosqlite = [
@@ -5083,8 +5083,8 @@ nest-asyncio = [
     {file = "nest_asyncio-1.5.6.tar.gz", hash = "sha256:d267cc1ff794403f7df692964d1d2a3fa9418ffea2a3f6859a439ff482fef290"},
 ]
 noteable-origami = [
-    {file = "noteable_origami-0.0.22-py3-none-any.whl", hash = "sha256:7b24ce934a4a779d459ff261de29d70122edebf335a99a73161e9d7fa4150c3a"},
-    {file = "noteable_origami-0.0.22.tar.gz", hash = "sha256:1f10abb3ab662d7c9e59af725eb09500305c0d5cc9ab991685042a332f9f91c8"},
+    {file = "noteable_origami-0.0.23-py3-none-any.whl", hash = "sha256:bcd3590e081b36dd8d3fd3b2a288e8bf6921017716336c7b88cb1ebe349ac75d"},
+    {file = "noteable_origami-0.0.23.tar.gz", hash = "sha256:1d59140269d4f2a84c0386f1788fd29759d0a4ce0b85bed629e08b10b4975936"},
 ]
 notebook = [
     {file = "notebook-6.5.2-py3-none-any.whl", hash = "sha256:e04f9018ceb86e4fa841e92ea8fb214f8d23c1cedfde530cc96f92446924f0e4"},
