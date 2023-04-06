@@ -13,7 +13,7 @@
 
 ---------
 
-[Install](#installation) | [Getting Started](#getting-started) | [License](./LICENSE) | [Code of Conduct](./CODE_OF_CONDUCT.md) | [Contributing](./CONTRIBUTING.md)
+[Install](#installation) | [Getting Started](#getting-started) | [Documentation](https://papermill-origami.readthedocs.io/) | [License](./LICENSE) | [Code of Conduct](./CODE_OF_CONDUCT.md) | [Contributing](./CONTRIBUTING.md)
 
 <!-- --8<-- [start:intro] -->
 ## Intro to Papermill-Origami
