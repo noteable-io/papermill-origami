@@ -18,7 +18,7 @@
 <!-- --8<-- [start:intro] -->
 ## Intro to Papermill-Origami
 
-Papermill-Origami is the bridge library between the [Origami Noteable SDK](https://noteable-origami.readthedocs.io/en/latest/) and [Papermill](https://papermill.readthedocs.io/en/latest/). It build a papermill engine that can talk to Noteable APIs to run Notebooks. 
+Papermill-Origami is the bridge library between the [Origami Noteable SDK](https://noteable-origami.readthedocs.io/en/latest/) and [Papermill](https://papermill.readthedocs.io/en/latest/). The papermill engine can talk to Noteable APIs to run Notebooks. 
 <!-- --8<-- [end:intro] -->
 
 <!-- --8<-- [start:requirements] -->
