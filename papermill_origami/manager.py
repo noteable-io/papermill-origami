@@ -106,7 +106,7 @@ class NoteableKernelManager(KernelManagerABC):
 
     has_kernel = run_sync(async_restart_kernel)
 
-    def async_interrupt_kernel(self):
+    async def async_interrupt_kernel(self):
         """Interrupts active execution on a live kernel"""
         raise NotImplementedError("TODO")
 
