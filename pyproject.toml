@@ -5,7 +5,7 @@
 
 [tool.poetry]
 name = "papermill-origami"
-version = "0.0.27"
+version = "0.0.28"
 description = "The noteable API interface"
 authors = ["Matt Seal <matt@noteable.io>"]
 maintainers = ["Matt Seal <matt@noteable.io>"]
@@ -34,7 +34,7 @@ url = "https://pypi.org"
 
 [tool.poetry.dependencies]
 python = "^3.8"
-noteable-origami = "^0.0.24"
+noteable-origami = "*"
 papermill = "^2.4.0"
 dagstermill = {version = "^0.17.6", optional = true}
 cloudpickle = "^2.2.0"
