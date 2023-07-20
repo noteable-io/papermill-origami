@@ -1693,6 +1693,18 @@ wrapt = ">=1.10,<2"
 dev = ["PyTest", "PyTest (<5)", "PyTest-Cov", "PyTest-Cov (<2.6)", "bump2version (<1)", "configparser (<5)", "importlib-metadata (<3)", "importlib-resources (<4)", "sphinx (<2)", "sphinxcontrib-websupport (<2)", "tox", "zipp (<2)"]
 
 [[package]]
+name = "diff-match-patch"
+version = "20200713"
+description = "Repackaging of Google's Diff Match and Patch libraries. Offers robust algorithms to perform the operations required for synchronizing plain text."
+category = "main"
+optional = false
+python-versions = ">=2.7"
+files = [
+    {file = "diff-match-patch-20200713.tar.gz", hash = "sha256:da6f5a01aa586df23dfc89f3827e1cafbb5420be9d87769eeb079ddfd9477a18"},
+    {file = "diff_match_patch-20200713-py3-none-any.whl", hash = "sha256:8bf9d9c4e059d917b5c6312bac0c137971a32815ddbda9c682b949f2986b4d34"},
+]
+
+[[package]]
 name = "dill"
 version = "0.3.6"
 description = "serialize all of python"
@@ -3941,27 +3953,29 @@ files = [
 
 [[package]]
 name = "noteable-origami"
-version = "0.0.24"
+version = "0.0.35"
 description = "The Noteable API interface"
 category = "main"
 optional = false
 python-versions = ">=3.8,<4.0"
 files = [
-    {file = "noteable_origami-0.0.24-py3-none-any.whl", hash = "sha256:4613ddd96195a271dbb1bcb6c8368e3f61c8de4e7ea5b6dbdd62b4aa52747f6d"},
-    {file = "noteable_origami-0.0.24.tar.gz", hash = "sha256:1be7d7fd434a5212bd7ffc8b36d8ac20aa9f246839f480be275d8c7f09c7075d"},
+    {file = "noteable_origami-0.0.35-py3-none-any.whl", hash = "sha256:62a59599acdf31572a60071a4f41851ca73b04846a506986cb70012c5fea808c"},
+    {file = "noteable_origami-0.0.35.tar.gz", hash = "sha256:61799a91c9cb5a5a592c0a9451493f7e8a61dbd4542e9236543a64112a883236"},
 ]
 
 [package.dependencies]
 backoff = ">=2.1.2,<3.0.0"
 bitmath = ">=1.3.3,<2.0.0"
-cryptography = ">=39.0.1,<40.0.0"
-httpx = ">=0.23.3,<0.24.0"
+cryptography = "*"
+diff-match-patch = ">=20200713,<20200714"
+httpx = "*"
 jwt = ">=1.3.1,<2.0.0"
 nbformat = ">=5.4.0,<6.0.0"
 orjson = ">=3.8.7,<4.0.0"
 pydantic = ">=1.10.5,<2.0.0"
+sending = ">=0.3.0,<0.4.0"
 structlog = ">=22.1.0,<23.0.0"
-websockets = ">=10.3,<11.0"
+websockets = "*"
 
 [[package]]
 name = "notebook"
@@ -5682,6 +5696,24 @@ files = [
 nativelib = ["pyobjc-framework-Cocoa", "pywin32"]
 objc = ["pyobjc-framework-Cocoa"]
 win32 = ["pywin32"]
+
+[[package]]
+name = "sending"
+version = "0.3.0"
+description = "Library for pub/sub usage within an async application"
+category = "main"
+optional = false
+python-versions = ">=3.8,<4.0"
+files = [
+    {file = "sending-0.3.0-py3-none-any.whl", hash = "sha256:baad4a8bc08aa55d50bb8d177effb20fa5de1012fc71c2678c90d2af215a403c"},
+    {file = "sending-0.3.0.tar.gz", hash = "sha256:4d275253f99bbaf8f791335275a6f64c02ab00870aebccb5a7a257ee86b76801"},
+]
+
+[package.extras]
+all = ["aioredis[hiredis] (>=2.0.0,<3.0.0)", "ipykernel (>=6.15.1,<7.0.0)", "jupyter_client (>=7.3.0,<8.0.0)", "websockets (>=10.3,<11.0)"]
+jupyter = ["ipykernel (>=6.15.1,<7.0.0)", "jupyter_client (>=7.3.0,<8.0.0)"]
+redis = ["aioredis[hiredis] (>=2.0.0,<3.0.0)"]
+websockets = ["websockets (>=10.3,<11.0)"]
 
 [[package]]
 name = "setproctitle"
