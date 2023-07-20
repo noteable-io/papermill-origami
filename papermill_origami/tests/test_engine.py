@@ -22,23 +22,15 @@ from papermill_origami.util import parse_noteable_file_id
 
 @pytest.fixture
 def mock_noteable_client(mocker, file):
-    patch_async_noteable_client = mocker.patch(
-        'papermill_origami.engine.NoteableClient', return_value=mocker.AsyncMock()
-    )
-    create_resp = mocker.Mock()
-    create_resp.parameterized_notebook = file
-    # This is done to mock the interactions with async context manager usage of NoteableClient
-    patch_async_noteable_client.return_value.__aenter__.return_value.create_parameterized_notebook.return_value = (
-        create_resp
-    )
+    create_parameterized_notebook_resp = mocker.Mock()
+    create_parameterized_notebook_resp.parameterized_notebook = file
 
-    # Return a mock client to be used by the NoteableEngine
-    client = mocker.Mock()
-    client.subscribe_file = mocker.AsyncMock()
-    client.update_job_instance = mocker.AsyncMock()
-    client.delete_kernel_session = mocker.AsyncMock()
-    client.create_parameterized_notebook = mocker.AsyncMock(return_value=create_resp)
-    return client
+    return mocker.patch(
+        'papermill_origami.engine.NoteableClient',
+        return_value=mocker.AsyncMock(
+            **{"create_parameterized_notebook.return_value": create_parameterized_notebook_resp}
+        ),
+    )
 
 
 @pytest.fixture
@@ -52,12 +44,10 @@ def noteable_engine(mocker, file, file_content, mock_noteable_client):
     execute_result = mocker.Mock()
     execute_result.state.is_error_state = False
 
-    noteable_engine = NoteableEngine(
-        nb_man=mock_nb_man, km=mocker.AsyncMock(), client=mock_noteable_client
-    )
+    noteable_engine = NoteableEngine(nb_man=mock_nb_man, client=mock_noteable_client())
 
     # Set the execution result to successful
-    noteable_engine.km.client.execute.return_value = execute_result
+    noteable_engine.client.execute.return_value = execute_result
 
     return noteable_engine
 
@@ -79,8 +69,8 @@ async def test_sync_noteable_nb_with_papermill(file, file_content, mocker, notea
         ext_logger=logging.getLogger(__name__),
     )
 
-    noteable_engine.km.client.delete_cell.assert_called_with(ANY, deleted_cell['id'])
-    noteable_engine.km.client.add_cell.assert_called_with(ANY, cell=added_cell, after_id=after_id)
+    noteable_engine.client.delete_cell.assert_called_with(ANY, deleted_cell['id'])
+    noteable_engine.client.add_cell.assert_called_with(ANY, cell=added_cell, after_id=after_id)
 
 
 async def test_default_client(mocker, file, file_content, noteable_engine):
@@ -91,7 +81,7 @@ async def test_default_client(mocker, file, file_content, noteable_engine):
         logger=logging.getLogger(__name__),
     )
     # Check that we sent an execute request to the client
-    noteable_engine.km.client.execute.assert_has_calls(
+    noteable_engine.client.execute.assert_has_calls(
         [mocker.call(ANY, cell.id) for cell in file_content.cells], any_order=True
     )
 
@@ -109,10 +99,8 @@ async def test_ignore_empty_code_cells(mocker, file, file_content, noteable_engi
     )
 
     # Check that we did not try to execute the empty cells
-    assert noteable_engine.km.client.execute.call_count == len(file_content.cells) - len(
-        empty_cells
-    )
-    noteable_engine.km.client.execute.assert_has_calls(
+    assert noteable_engine.client.execute.call_count == len(file_content.cells) - len(empty_cells)
+    noteable_engine.client.execute.assert_has_calls(
         [mocker.call(ANY, cell.id) for cell in non_empty_cells],
         any_order=True,
     )
@@ -128,7 +116,7 @@ async def test_propagate_cell_execution_error(mocker, file, file_content, noteab
     # Set the last cell to be an error
     execute_results[-1].state.is_error_state = True
 
-    noteable_engine.km.client.execute.side_effect = execute_results
+    noteable_engine.client.execute.side_effect = execute_results
 
     await noteable_engine.execute(
         file_id='fake_id',
