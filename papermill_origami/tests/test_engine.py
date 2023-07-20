@@ -80,6 +80,7 @@ async def test_default_client(mocker, file, file_content, noteable_engine):
         noteable_nb=file_content,
         logger=logging.getLogger(__name__),
     )
+    noteable_engine.client.get_or_launch_ready_kernel_session.assert_called_once()
     # Check that we sent an execute request to the client
     noteable_engine.client.execute.assert_has_calls(
         [mocker.call(ANY, cell.id) for cell in file_content.cells], any_order=True
