@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [0.0.29] - 2023-07-20
+### Removed
+- Remove use of `NoteableKernelManager` to reduce unnecessary abstractions
+
+### Fixed
+- Fix `AttributeError` on trying to fetch `NoteableClient.file_session_cache` which has been removed. Determine kernels channel id from file_id instead.
+
 ## [0.0.28] - 2023-07-17
 ### Changed
 - Allow any version of `noteable-origami` to be installed with this library
