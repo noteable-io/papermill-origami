@@ -49,8 +49,6 @@ class NoteableHandler:
         """Reads a file from the noteable client by either version id, file id or file url"""
         id = parse_noteable_file_id(path)
         # Wrap the async call since we're in a blocking method
-        print("fails after this")
-        print(id)
         file_version: FileVersion = run_sync(self.client.get_version_or_none)(id)
         if file_version is not None:
             resp = httpx.get(file_version.content_presigned_url)
