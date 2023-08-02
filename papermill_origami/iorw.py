@@ -1,6 +1,7 @@
 """The iorw module provides the handlers for registration with papermill to read/write Notebooks"""
 import functools
 import json
+import os
 from urllib.parse import urlparse
 
 import httpx
@@ -54,6 +55,11 @@ class NoteableHandler:
         # Wrap the async call since we're in a blocking method
         file_version: FileVersion = run_sync(self.client.get_version_or_none)(id)
         if file_version is not None:
+            # Only used for local testing with minio in a k8s cluster
+            if os.environ.get("LOCAL_K8S"):
+                file_version.content_presigned_url = file_version.content_presigned_url.replace(
+                    "localhost", "minio"
+                )
             resp = httpx.get(file_version.content_presigned_url)
             resp.raise_for_status()
             file_contents = resp.json()
