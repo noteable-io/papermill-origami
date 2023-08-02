@@ -5,9 +5,99 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+## [0.0.29] - 2023-07-20
+### Removed
+- Remove use of `NoteableKernelManager` to reduce unnecessary abstractions
+
+### Fixed
+- Fix `AttributeError` on trying to fetch `NoteableClient.file_session_cache` which has been removed. Determine kernels channel id from file_id instead.
+
+## [0.0.28] - 2023-07-17
+### Changed
+- Allow any version of `noteable-origami` to be installed with this library
+
+## [0.0.27] - 2023-06-16
+### Fixed
+- Fix run_sync AssertionError by making async_interrupt_kernel actually async
+
+## [0.0.26] - 2023-04-17
+## Changed
+- Upgrade noteable-origami to 0.0.24
+
+## [0.0.25] - 2023-04-04
+## Changed
+- Upgrade noteable-origami to 0.0.23
+
+## [0.0.24] - 2023-03-28
+### Changed
+- Upgrade noteable-origami to 0.0.22
+
+## [0.0.23] - 2023-03-17
+- `NoteableEngine` accepts new kwarg `override_progress_bar` to override the default progress bar and set the `tqdm` instance to log to `stdout` instead of the default `stderr`. 
+
+## [0.0.22] - 2023-03-14
+- Upgrade noteable-origami to 0.0.21
+
+## [0.0.21] - 2023-02-21
+### Changed
+- Upgraded noteable-origami to 0.0.19
+
+## [0.0.20] - 2023-01-06
+### Changed
+- Upgraded noteable-origami to 0.0.18
+
+## [0.0.19] - 2023-01-04
+### Added
+- Catch exceptions on update cell and nb metadata
+
+## [0.0.18] - 2022-12-19
+### Changed
+- Catch asyncio.exceptions.TimeoutError when updating notebook metadata over RTU
+
+## [0.0.17] - 2022-12-16
+### Changed
+- Catch all HTTPStatusErrors when trying to delete the kernel session after successful execution
+
+## [0.0.16] - 2022-12-14
+### Changed
+- Added back `asyncio.sleep` before connecting to Noteable (temporarily, until our API fix is deployed to prod)
+
+## [0.0.15] - 2022-12-13
+## Changed
+- Changed dagster `SolidExecutionContext` to `OpExecutionContext`
+- Upgraded dagstermill to `0.17.6`
+
+## [0.0.14] - 2022-12-13
+### Fixed
+- Catch httpx.ReadTimeout error when trying to delete the kernel session -- if we're trying to delete the kernel session, it means the run has succeeded.
+
+### Removed
+- Remove the asyncio.sleep right before setup_kernel, which was needed since we tried to RTU subscribe to a file as soon as the parameterized notebook was created.
+- Remove the redundant subscribe_file call -- we already subscribe to the file when trying to launch a new kernel (in origami.client.NoteableClient.get_or_launch_kernel_session)
+
+## [0.0.13] - 2022-12-07
+### Added
+- Added prefect-jupyter dependency
+
+## [0.0.12] - 2022-12-02
+### Added
+- Mark job instance attempt failed when any uncaught exception is thrown (including connecting to the kernel)
+- Added origami client call to delete the active kernel session after successful notebook execution
+
+### Changed
+- Upgraded `noteable-client` to `0.0.16`
+
+## [0.0.11] - 2022-11-18
+### Added
+- Added API calls to update job instance attempt status during execution
+
+## [0.0.10]
+### Changed
+- Upgrade `noteable-origami` to `0.0.14`
+
 ## [0.0.9] - 2022-11-01
 ## Changed
-Updated API references in origami from `types` to `defs`
+- Updated API references in origami from `types` to `defs`
 
 ## [0.0.8] - 2022-10-28
 ### Added

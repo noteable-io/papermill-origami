@@ -6,11 +6,14 @@ import asyncio
 import functools
 import json
 import logging
+import sys
 from contextlib import asynccontextmanager
 from typing import Generator, Optional
 
+import httpx
 import nbformat
 import orjson
+import websockets.exceptions
 from jupyter_client.utils import run_sync
 from nbclient.exceptions import CellExecutionError
 from nbformat import NotebookNode
@@ -20,7 +23,9 @@ from origami.defs.jobs import (
     CustomerJobDefinitionReferenceInput,
     CustomerJobInstanceReferenceInput,
     JobInstanceAttempt,
+    JobInstanceAttemptRequest,
     JobInstanceAttemptStatus,
+    JobInstanceAttemptUpdate,
 )
 from origami.defs.rtu import (
     AppendOutputEventSchema,
@@ -32,7 +37,6 @@ from origami.defs.rtu import (
 )
 from papermill.engines import Engine, NotebookExecutionManager
 
-from .manager import NoteableKernelManager
 from .util import flatten_dict, parse_noteable_file_id
 
 logger = logging.getLogger(__name__)
@@ -69,7 +73,6 @@ class NoteableEngine(Engine):
         self,
         nb_man: NotebookExecutionManager,
         client: Optional[NoteableClient] = None,
-        km: Optional[NoteableKernelManager] = None,
         timeout_func=None,
         timeout: float = None,
         log_output: bool = False,
@@ -83,19 +86,15 @@ class NoteableEngine(Engine):
         ----------
         nb_man : NotebookExecutionManager
             Notebook execution manager wrapper being executed.
-        km : KernelManager (optional)
-            Optional kernel manager. If none is provided, a kernel manager will
-            be created.
         """
         self.nb_man = nb_man
         self.client = client
-        self.km = km
         self.timeout_func = timeout_func
         self.timeout = timeout
         self.log_output = log_output
         self.stdout_file = stdout_file
         self.stderr_file = stderr_file
-        self.kernel_name = kw.get('kernel_name', '__NOT_SET__')
+        self.kernel_name = kw.get('kernel_name')
         self.nb = nb_man.nb
         # Map parent_collection_id to cell_id in order to process any append_output_events
         # which are uniquely identified by parent_collection_id and not cell_id
@@ -106,6 +105,16 @@ class NoteableEngine(Engine):
         # Currently, this is only used when the output is of type display_data.
         self.__noteable_output_id_cache = {}
         self.file = None
+        self.job_instance_attempt: Optional[JobInstanceAttempt] = None
+
+        if kw.get("override_progress_bar", False):
+            from tqdm.auto import tqdm
+
+            # https://github.com/nteract/papermill/blob/54f6c038cdae0c70d5fb04691fa465e12aeb62cb/papermill/engines.py#L114 # noqa: E501
+            # file is set to stderr by default, but we want to use stdout, so we override it here
+            self.nb_man.pbar = tqdm(
+                total=len(self.nb.cells), unit="cell", desc="Executing", file=sys.stdout
+            )
 
     def catch_cell_metadata_updates(self, func):
         """A decorator for catching cell metadata updates related to papermill
@@ -120,11 +129,18 @@ class NoteableEngine(Engine):
             for key, value in flatten_dict(
                 cell.metadata.papermill, parent_key_tuple=("papermill",)
             ).items():
-                run_sync(self.km.client.update_cell_metadata)(
-                    file=self.file,
-                    cell_id=cell.id,
-                    metadata_update_properties={"path": key, "value": value},
-                )
+                try:
+                    run_sync(self.client.update_cell_metadata)(
+                        file=self.file,
+                        cell_id=cell.id,
+                        metadata_update_properties={"path": key, "value": value},
+                    )
+                except (
+                    asyncio.exceptions.TimeoutError,
+                    websockets.exceptions.ConnectionClosedError,
+                ):
+                    logger.debug("Encountered an error while updating cell metadata")
+                    pass
             return ret_val
 
         return wrapper
@@ -136,7 +152,7 @@ class NoteableEngine(Engine):
         if not kwargs.get("logger"):
             kwargs["logger"] = logger
 
-        dagster_logger = kwargs["logger"]
+        ext_logger = kwargs["logger"]
 
         dagster_context = kwargs.get("dagster_context")
 
@@ -152,7 +168,13 @@ class NoteableEngine(Engine):
             else:
                 raise ValueError("No file_id or derivable file_id found")
 
-        job_instance_attempt = kwargs.get("job_instance_attempt")
+        job_instance_attempt_request = (
+            JobInstanceAttemptRequest.parse_obj(kwargs.get('job_instance_attempt'))
+            if kwargs.get('job_instance_attempt')
+            else None
+        )
+
+        # Setup job instance attempt from the provided customer job metadata
         if job_metadata := kwargs.get("job_metadata", {}):
             version = await self.client.get_version_or_none(original_notebook_id)
             if version is not None:
@@ -161,7 +183,7 @@ class NoteableEngine(Engine):
                 file = await self.client.get_notebook(original_notebook_id)
                 space_id = file.space_id
 
-            # 1: Ensure the job definition&instance references exists
+            # 1: Ensure the job definition and instance references exists
             job_instance = await self.client.create_job_instance(
                 CustomerJobInstanceReferenceInput(
                     orchestrator_job_instance_id=job_metadata.get('job_instance_id'),
@@ -179,16 +201,18 @@ class NoteableEngine(Engine):
 
             # 2: Set up the job instance attempt
             # TODO: update the job instance attempt status while running/after completion
-            job_instance_attempt = JobInstanceAttempt(
+            job_instance_attempt_request = JobInstanceAttemptRequest(
                 status=JobInstanceAttemptStatus.CREATED,
                 attempt_number=0,
                 customer_job_instance_reference_id=job_instance.id,
             )
 
         # Create the parameterized_notebook
-        self.file = await self.client.create_parameterized_notebook(
-            original_notebook_id, job_instance_attempt=job_instance_attempt
+        resp = await self.client.create_parameterized_notebook(
+            original_notebook_id, job_instance_attempt=job_instance_attempt_request
         )
+        self.file = resp.parameterized_notebook
+        self.job_instance_attempt = resp.job_instance_attempt
         parameterized_url = f"https://{self.client.config.domain}/f/{self.file.id}"
 
         self.nb.metadata["executed_notebook_url"] = parameterized_url
@@ -208,50 +232,70 @@ class NoteableEngine(Engine):
                 solid_handle=dagster_context.op_handle,
                 event_specific_data=AssetObservationData(asset_obs),
             )
-            dagster_logger.log_dagster_event(
+            ext_logger.log_dagster_event(
                 level="INFO", msg="Parameterized notebook available at", dagster_event=event
             )
         else:
-            dagster_logger.info(f"Parameterized notebook available at {parameterized_url}")
-        # HACK: We need this delay in order to successfully subscribe to the files channel
-        #       of the newly created parameterized notebook.
+            ext_logger.info(f"Parameterized notebook available at {parameterized_url}")
+
+        # Temporarily sleep for 1s to wait for file to be available to be subscribed to.
         await asyncio.sleep(1)
 
-        async with self.setup_kernel(file=self.file, client=self.client, **kwargs):
-            noteable_nb = nbformat.reads(
-                self.file.content
-                if isinstance(self.file.content, str)
-                else json.dumps(self.file.content),
-                as_version=4,
-            )
-            await self.sync_noteable_nb_with_papermill(
-                file=self.file,
-                noteable_nb=noteable_nb,
-                papermill_nb=self.nb,
-                dagster_logger=dagster_logger,
-            )
+        try:
+            async with self.setup_kernel(file=self.file, client=self.client, **kwargs):
+                noteable_nb = nbformat.reads(
+                    self.file.content
+                    if isinstance(self.file.content, str)
+                    else json.dumps(self.file.content),
+                    as_version=4,
+                )
+                await self.sync_noteable_nb_with_papermill(
+                    file=self.file,
+                    noteable_nb=noteable_nb,
+                    papermill_nb=self.nb,
+                    ext_logger=ext_logger,
+                )
 
-            # Sync metadata from papermill to noteable before execution
-            await self.sync_noteable_nb_metadata_with_papermill()
+                # Sync metadata from papermill to noteable before execution
+                await self.sync_noteable_nb_metadata_with_papermill()
 
-            await self.papermill_execute_cells()
+                # We're going to start executing the notebook; Update the job instance attempt status to RUNNING
+                if self.job_instance_attempt:
+                    logger.debug(
+                        f"Updating job instance attempt id {self.job_instance_attempt.id} to status RUNNING"
+                    )
+                    await self.client.update_job_instance(
+                        job_instance_attempt_id=self.job_instance_attempt.id,
+                        job_instance_attempt_update=JobInstanceAttemptUpdate(
+                            status=JobInstanceAttemptStatus.RUNNING
+                        ),
+                    )
 
-            # This is a hack to ensure we have the client in session to send nb metadata
-            # updates over RTU after execution.
-            self.nb_man.notebook_complete()
-            await self.sync_noteable_nb_metadata_with_papermill()
+                await self.papermill_execute_cells()
 
-            # Override the notebook_complete method and set it to a no-op (since we already called it)
-            self.nb_man.notebook_complete = lambda: None
+                # This is a hack to ensure we have the client in session to send nb metadata
+                # updates over RTU after execution.
+                self.nb_man.notebook_complete()
+                await self.sync_noteable_nb_metadata_with_papermill()
 
-            # info_msg = self.wait_for_reply(self.kc.kernel_info())
-            # self.nb.metadata['language_info'] = info_msg['content']['language_info']
+                # Override the notebook_complete method and set it to a no-op (since we already called it)
+                self.nb_man.notebook_complete = lambda: None
+        except:  # noqa
+            logger.exception("Error executing notebook")
+            if self.job_instance_attempt:
+                await self.client.update_job_instance(
+                    job_instance_attempt_id=self.job_instance_attempt.id,
+                    job_instance_attempt_update=JobInstanceAttemptUpdate(
+                        status=JobInstanceAttemptStatus.FAILED
+                    ),
+                )
+            raise
 
         return self.nb
 
     @ensure_client
     async def sync_noteable_nb_with_papermill(
-        self, file: NotebookFile, noteable_nb, papermill_nb, dagster_logger
+        self, file: NotebookFile, noteable_nb, papermill_nb, ext_logger
     ):
         """Used to sync the cells of in-memory notebook representation that papermill manages with the Noteable notebook
 
@@ -265,13 +309,13 @@ class NoteableEngine(Engine):
         deleted_cell_ids = list(set(noteable_nb_cell_ids) - set(papermill_nb_cell_ids))
         added_cell_ids = list(set(papermill_nb_cell_ids) - set(noteable_nb_cell_ids))
         for cell_id in deleted_cell_ids:
-            await self.km.client.delete_cell(file, cell_id)
+            await self.client.delete_cell(file, cell_id)
         for cell_id in added_cell_ids:
             idx = papermill_nb_cell_ids.index(cell_id)
             after_id = papermill_nb_cell_ids[idx - 1] if idx > 0 else None
-            await self.km.client.add_cell(file, cell=papermill_nb.cells[idx], after_id=after_id)
+            await self.client.add_cell(file, cell=papermill_nb.cells[idx], after_id=after_id)
 
-        dagster_logger.info(
+        ext_logger.info(
             "Synced notebook with Noteable, "
             f"added {len(added_cell_ids)} cells and deleted {len(deleted_cell_ids)} cells"
         )
@@ -284,39 +328,27 @@ class NoteableEngine(Engine):
         for key, value in flatten_dict(
             self.nb.metadata.papermill, parent_key_tuple=("papermill",)
         ).items():
-            await self.km.client.update_nb_metadata(self.file, {"path": key, "value": value})
-
-    @staticmethod
-    def create_kernel_manager(file: NotebookFile, client: NoteableClient, **kwargs):
-        """Helper that generates a kernel manager object from kwargs"""
-        return NoteableKernelManager(file, client, **kwargs)
+            try:
+                await self.client.update_nb_metadata(self.file, {"path": key, "value": value})
+            except (asyncio.exceptions.TimeoutError, websockets.exceptions.ConnectionClosedError):
+                logger.debug("Encountered an error while updating notebook metadata")
+                pass
 
     @asynccontextmanager
     async def setup_kernel(self, cleanup_kc=True, cleanup_kc_on_error=False, **kwargs) -> Generator:
         """Context manager for setting up the kernel to execute a notebook."""
-        dagster_logger = kwargs["logger"]
+        ext_logger = kwargs["logger"]
 
-        if self.km is None:
-            # Assumes that file and client are being passed in
-            self.km = self.create_kernel_manager(**kwargs)
+        # Pass in the kernel name if specified
+        launch_kwargs = {}
+        if self.kernel_name is not None:
+            launch_kwargs["kernel_name"] = self.kernel_name
 
-        # Subscribe to the file or we won't see status updates
-        await self.client.subscribe_file(self.km.file, from_version_id=self.file.current_version_id)
-        dagster_logger.info("Subscribed to file")
+        await self.client.get_or_launch_ready_kernel_session(self.file, **launch_kwargs)
 
-        await self.km.async_start_kernel(**kwargs)
-        dagster_logger.info("Started kernel")
+        ext_logger.info("Started kernel")
 
-        try:
-            yield
-            # if cleanup_kc:
-            #     if await self.km.async_is_alive():
-            #         await self.km.async_shutdown_kernel()
-        finally:
-            pass
-            # if cleanup_kc and cleanup_kc_on_error:
-            #     if await self.km.async_is_alive():
-            #         await self.km.async_shutdown_kernel()
+        yield
 
     sync_execute = run_sync(execute)
 
@@ -326,9 +358,13 @@ class NoteableEngine(Engine):
     def _cell_exception(self, cell, cell_index=None, **kwargs):
         self.catch_cell_metadata_updates(self.nb_man.cell_exception)(cell, cell_index, **kwargs)
         # Manually update the Noteable nb metadata
-        run_sync(self.km.client.update_nb_metadata)(
-            self.file, {"path": ["papermill", "exception"], "value": True}
-        )
+        try:
+            run_sync(self.client.update_nb_metadata)(
+                self.file, {"path": ["papermill", "exception"], "value": True}
+            )
+        except (asyncio.exceptions.TimeoutError, websockets.exceptions.ConnectionClosedError):
+            logger.debug("Encountered an error while updating notebook metadata")
+            pass
 
     def _cell_complete(self, cell, cell_index=None, **kwargs):
         self.catch_cell_metadata_updates(self.nb_man.cell_complete)(cell, cell_index, **kwargs)
@@ -350,8 +386,9 @@ class NoteableEngine(Engine):
            metadata of each cell.
         """
 
-        files_channel = self.km.client.files_channel(file_id=self.km.file.id)
-        self.km.client.register_message_callback(
+        files_channel = self.client.files_channel(file_id=self.file.id)
+        kernels_channel = self.client.kernels_channel(file_id=self.file.id)
+        self.client.register_message_callback(
             self._update_outputs_callback,
             files_channel,
             "update_output_collection_event",
@@ -359,7 +396,7 @@ class NoteableEngine(Engine):
             once=False,
         )
 
-        self.km.client.register_message_callback(
+        self.client.register_message_callback(
             self._append_outputs_callback,
             files_channel,
             "append_output_event",
@@ -367,7 +404,7 @@ class NoteableEngine(Engine):
             once=False,
         )
 
-        self.km.client.register_message_callback(
+        self.client.register_message_callback(
             self._display_handler_update_callback,
             files_channel,
             "update_outputs_by_display_id_event",
@@ -375,15 +412,16 @@ class NoteableEngine(Engine):
             once=False,
         )
 
-        self.km.client.register_message_callback(
+        self.client.register_message_callback(
             self._update_execution_count_callback,
-            self.km.kernel.kernel_channel,
+            kernels_channel,
             "bulk_cell_state_update_event",
             response_schema=BulkCellStateMessage,
             once=False,
         )
 
         # Execute each cell and update the output in real time.
+        errored = False
         for index, cell in enumerate(self.nb.cells):
             try:
                 self._cell_start(cell, index)
@@ -391,9 +429,41 @@ class NoteableEngine(Engine):
             except CellExecutionError as ex:
                 # TODO: Make sure we raise these
                 self._cell_exception(self.nb.cells[index], index, exception=ex)
+                errored = True
                 break
             finally:
                 self._cell_complete(self.nb.cells[index], cell_index=index)
+
+        # Update the job instance attempt status
+        if self.job_instance_attempt:
+            status = (
+                JobInstanceAttemptStatus.FAILED if errored else JobInstanceAttemptStatus.SUCCEEDED
+            )
+            logger.debug(
+                f"Updating job instance attempt id {self.job_instance_attempt.id} to status {status}"
+            )
+            await self.client.update_job_instance(
+                job_instance_attempt_id=self.job_instance_attempt.id,
+                job_instance_attempt_update=JobInstanceAttemptUpdate(status=status),
+            )
+
+        if not errored:
+            # Delete the kernel session
+            logger.debug("Deleting kernel session for file id %s", self.file.id)
+            try:
+                await self.client.delete_kernel_session(self.file)
+            except httpx.ReadTimeout:
+                logger.warning(
+                    "Timed out while deleting kernel session for file id %s",
+                    self.file.id,
+                )
+            except httpx.HTTPStatusError as e:
+                # Ignore any HTTP errors that occur while deleting the kernel session
+                logger.warning(
+                    "Failed to delete kernel session for file id %s. Error: %s",
+                    self.file.id,
+                    e,
+                )
 
     def _get_timeout(self, cell: Optional[NotebookNode]) -> int:
         """Helper to fetch a timeout as a value or a function to be run against a cell"""
@@ -560,7 +630,7 @@ class NoteableEngine(Engine):
         cell : NotebookNode
             The cell which was just processed.
         """
-        assert self.km.client is not None
+        assert self.client is not None
         if cell.cell_type != 'code':
             logger.debug("Skipping non-executing cell %s", cell_index)
             return cell
@@ -581,11 +651,8 @@ class NoteableEngine(Engine):
 
         # By default this will wait until the cell execution status is no longer active
 
-        result = await self.km.client.execute(self.km.file, cell.id)
-        # TODO: This wasn't behaving correctly with the timeout?!
-        # result = await asyncio.wait_for(self.km.client.execute(self.km.file, cell.id), self._get_timeout(cell))
+        result = await self.client.execute(self.file, cell.id)
         if result.state.is_error_state:
-            # TODO: Add error info from stacktrace output messages
             raise CellExecutionError("", str(result.state), "Cell execution failed")
         return cell
 

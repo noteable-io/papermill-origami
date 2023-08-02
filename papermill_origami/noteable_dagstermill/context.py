@@ -5,7 +5,7 @@ from typing import Any, Optional, Union, cast
 import cloudpickle
 import dagster._check as check
 from dagster import DagsterLogManager, DagsterRun, JobDefinition, OpDefinition
-from dagster._core.definitions import Node, NodeHandle, SolidDefinition
+from dagster._core.definitions import Node, NodeHandle
 from dagster._core.execution.context.compute import AbstractComputeExecutionContext
 
 
@@ -51,8 +51,9 @@ class SerializableExecutionContext(AbstractComputeExecutionContext):
         return self.solid
 
     @property
-    def solid_def(self) -> SolidDefinition:
+    def solid_def(self):
         """SolidDefinition: The current solid definition."""
+        # TODO: this is deprecated in dagstermill; remove later
         return self.solid_def
 
     @property
