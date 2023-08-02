@@ -24,7 +24,10 @@ def _ensure_client(func):
             # If we're not a handler, we need to create a handler instance
             # and then bind the function to it
             with NoteableClient() as client:
-                if (url := urlparse(obj)).scheme in ("https", "http") and url.netloc != client.config.domain:
+                if (url := urlparse(obj)).scheme in (
+                    "https",
+                    "http",
+                ) and url.netloc != client.config.domain:
                     logger.warning(
                         "The domain from the file URL does not match the domain from the default client config"
                     )
