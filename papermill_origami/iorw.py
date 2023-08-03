@@ -56,13 +56,6 @@ class NoteableHandler:
         file_version: FileVersion = run_sync(self.client.get_version_or_none)(id)
         if file_version is not None:
             # Only used for local testing with minio in a k8s cluster
-            logger.critical("LOCAL_K8S", value=os.environ.get("LOCAL_K8S", "false"))
-            logger.critical("content_url", value=file_version.content_presigned_url)
-            if os.environ.get("LOCAL_K8S", "false").lower() == "true":
-                file_version.content_presigned_url = file_version.content_presigned_url.replace(
-                    "localhost", "minio"
-                )
-            logger.critical("content_url after replacing", value=file_version.content_presigned_url)
             resp = httpx.get(file_version.content_presigned_url)
             resp.raise_for_status()
             file_contents = resp.json()
