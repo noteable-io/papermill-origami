@@ -7,8 +7,8 @@ from jupyter_client.utils import run_sync
 from origami.clients.rtu import RTUClient
 from origami.models.notebook import CodeCell, Notebook
 from papermill.engines import Engine, NotebookExecutionManager
-from papermill_origami.dependencies import get_api_client
 
+from papermill_origami.dependencies import get_api_client
 from papermill_origami.path_util import parse_noteable_file_id_and_version_number
 
 
