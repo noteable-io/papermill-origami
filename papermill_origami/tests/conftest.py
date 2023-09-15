@@ -3,8 +3,6 @@ from datetime import datetime, timezone
 
 import nbformat.v4
 import pytest
-from origami.defs.access_levels import Visibility
-from origami.defs.files import FileType, NotebookFile
 
 
 @pytest.fixture

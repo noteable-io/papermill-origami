@@ -34,7 +34,6 @@ url = "https://pypi.org"
 
 [tool.poetry.dependencies]
 python = "^3.8"
-noteable-origami = "*"
 papermill = "^2.4.0"
 dagstermill = {version = "^0.17.6", optional = true}
 cloudpickle = "^2.2.0"
@@ -42,6 +41,7 @@ flytekit = {version = "^1.2.1", optional = true}
 flytekitplugins-papermill = {version = "^1.2.1", optional = true}
 apache-airflow = { version = "^2.4.2", optional = true }
 prefect-jupyter = { version = "^0.2.0", optional = true }
+noteable-origami = "^1.0.0"
 
 [tool.poetry.dev-dependencies]
 flake8-docstrings = "^1.6.0"
@@ -65,7 +65,6 @@ airflow = ["apache-airflow"]
 prefect = ["prefect-jupyter"]
 
 [tool.poetry.plugins."papermill.io"]
-"noteable://" = "papermill_origami.iorw:NoteableHandler"
 "https://" = "papermill_origami.iorw:NoteableHandler"
 
 [tool.poetry.plugins."papermill.engine"]
