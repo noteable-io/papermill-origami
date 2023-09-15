@@ -5,8 +5,12 @@ def parse_noteable_file_id_and_version_number(path) -> tuple[str, int]:
     """
 
     Examples:
-    >>> parse_noteable_file_id('https://app.noteable.io/f/f78d668e-13f3-49da-84a9-afdece1b1e2a')
-    'f78d668e-13f3-49da-84a9-afdece1b1e2a'
+    >>> parse_noteable_file_id_and_version_number('https://app.noteable.io/f/f78d668e-13f3-49da-84a9-afdece1b1e2a')
+    ('f78d668e-13f3-49da-84a9-afdece1b1e2a', None)
+    >>> parse_noteable_file_id_and_version_number('https://app.noteable.io/f/f78d668e-13f3-49da-84a9-afdece1b1e2a/My%20Notebook.ipynb')
+    ('f78d668e-13f3-49da-84a9-afdece1b1e2a', None)
+    >>> parse_noteable_file_id_and_version_number('https://app.noteable.io/f/f78d668e-13f3-49da-84a9-afdece1b1e2a/v/2')
+    ('f78d668e-13f3-49da-84a9-afdece1b1e2a', 2)
     """
     url = urlparse(path)
     if url.scheme.startswith("http"):

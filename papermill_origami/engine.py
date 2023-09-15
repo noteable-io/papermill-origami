@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 import httpx
 import nbformat
@@ -10,6 +11,8 @@ from papermill.engines import Engine, NotebookExecutionManager
 
 from papermill_origami.dependencies import get_api_client
 from papermill_origami.path_util import parse_noteable_file_id_and_version_number
+
+engine_logger = logging.getLogger(__name__)
 
 
 class NoteableEngine(Engine):
@@ -40,6 +43,9 @@ class NoteableEngine(Engine):
     async def _execute_managed_notebook(
         self, notebook_execution_manager: NotebookExecutionManager, kernel_name: str, **kwargs
     ):
+        logger = kwargs.get("logger", engine_logger)
+        job_instance_attempt_create_body = kwargs.get("job_instance_attempt")
+
         # Get file id and file version number from input_path
         file_id, version_number = parse_noteable_file_id_and_version_number(kwargs["input_path"])
 
@@ -49,16 +55,21 @@ class NoteableEngine(Engine):
         version_id = None
         if version_number is not None:
             version_id = await self.version_id_from_number(file_id, version_number)
-        print(f"version_id: {version_id}")
+
         # Create a parameterized notebook with the file_id as the source notebook
         parameterized_notebook, job_instance_attempt = await self.create_parameterized_notebook(
-            file_id, version_id, job_instance_attempt=kwargs.get("job_instance_attempt")
+            file_id, version_id, job_instance_attempt=job_instance_attempt_create_body
         )
 
         async with httpx.AsyncClient() as plain_client:
             resp = await plain_client.get(parameterized_notebook["presigned_download_url"])
             resp.raise_for_status()
-        noteable_nb = nbformat.from_dict(resp.json())
+
+        extra_log_data = {
+            "file_id": str(parameterized_notebook["id"]),
+            "job_instance_attempt_id": str(job_instance_attempt["id"]) if job_instance_attempt else None,
+        }
+        logger.info("Created parameterized notebook", extra=extra_log_data)
 
         errored = False
         kernel_session_id = None
@@ -70,9 +81,10 @@ class NoteableEngine(Engine):
             # parameters cell with a new cell tagged `injected-parameters`.
             await self.sync_noteable_nb_with_papermill(
                 rtu_client=rtu_client,
-                noteable_nb=noteable_nb,
-                papermill_nb=notebook_execution_manager.nb,
+                noteable_nb=Notebook.parse_obj(resp.json()),
+                papermill_nb=Notebook.parse_obj(notebook_execution_manager.nb),
             )
+            logger.info("Synced notebook with papermill", extra=extra_log_data)
 
             # Launch kernel
             kernel_session = await self.api_client.launch_kernel(
@@ -87,6 +99,7 @@ class NoteableEngine(Engine):
                     f"/v1/job-instance-attempts/{job_instance_attempt['id']}",
                     json={"status": "RUNNING"},
                 )
+                logger.info("Updated job instance attempt status to RUNNING", extra=extra_log_data)
 
             # Execute all cells
             queued_execution = await rtu_client.queue_execution(run_all=True)
@@ -112,6 +125,7 @@ class NoteableEngine(Engine):
                 )
         except Exception as e:  # noqa
             if job_instance_attempt:
+                logger.info("Updated job instance attempt status to RUNNING", extra=extra_log_data)
                 await self.api_client.client.patch(
                     f"/v1/job-instance-attempts/{job_instance_attempt['id']}",
                     json={"status": "FAILED"},
@@ -128,8 +142,9 @@ class NoteableEngine(Engine):
     def execute_managed_notebook(cls, nb_man, kernel_name, **kwargs):
         return run_sync(cls()._execute_managed_notebook)(nb_man, kernel_name, **kwargs)
 
+    @staticmethod
     async def sync_noteable_nb_with_papermill(
-        self, rtu_client: RTUClient, noteable_nb: Notebook, papermill_nb: Notebook
+        rtu_client: RTUClient, noteable_nb: Notebook, papermill_nb: Notebook
     ):
         """Used to sync the cells of in-memory notebook representation that papermill manages with the Noteable notebook
 

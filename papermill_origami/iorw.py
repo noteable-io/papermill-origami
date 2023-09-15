@@ -24,6 +24,7 @@ class NoteableHandler:
             return orjson.dumps(file_contents)
         else:
             rtu_client = await client.connect_realtime(file_id)
+            await rtu_client.shutdown()
             return rtu_client.builder.nb.json()
 
     @staticmethod
