@@ -3,7 +3,7 @@ import orjson
 from jupyter_client.utils import run_sync
 
 from papermill_origami.dependencies import get_api_client
-from papermill_origami.path_util import parse_noteable_file_id_and_version_number
+from papermill_origami.path_util import parse_noteable_file_path
 
 
 class NoteableHandler:
@@ -14,7 +14,7 @@ class NoteableHandler:
     @staticmethod
     async def _read(path) -> str:
         client = get_api_client()
-        file_id, version_number = parse_noteable_file_id_and_version_number(path)
+        file_id, version_number = parse_noteable_file_path(path)
 
         if version_number is not None:
             resp = await client.client.get(f"/files/{file_id}/versions/{version_number}")

@@ -1,6 +1,6 @@
 import pytest
 
-from papermill_origami.path_util import parse_noteable_file_id_and_version_number
+from papermill_origami.path_util import parse_noteable_file_path
 
 
 @pytest.mark.parametrize(
@@ -12,4 +12,4 @@ from papermill_origami.path_util import parse_noteable_file_id_and_version_numbe
     ],
 )
 def test_parse_noteable_file_id(url, file_id, version_number):
-    assert parse_noteable_file_id_and_version_number(url) == (file_id, version_number)
+    assert parse_noteable_file_path(url) == (file_id, version_number)

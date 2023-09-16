@@ -9,7 +9,7 @@ from origami.models.notebook import CodeCell, Notebook
 from papermill.engines import Engine, NotebookExecutionManager
 
 from papermill_origami.dependencies import get_api_client
-from papermill_origami.path_util import parse_noteable_file_id_and_version_number
+from papermill_origami.path_util import parse_noteable_file_path
 
 engine_logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ class NoteableEngine(Engine):
         job_instance_attempt_create_body = kwargs.get("job_instance_attempt")
 
         # Get file id and file version number from input_path
-        file_id, version_number = parse_noteable_file_id_and_version_number(input_path)
+        file_id, version_number = parse_noteable_file_path(input_path)
 
         # Get the version_id from the version_number if it exists
         # This would be the second time we call the API to get the version_id
