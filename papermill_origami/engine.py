@@ -1,7 +1,6 @@
 import asyncio
 import logging
 
-import httpx
 import nbformat
 import orjson
 from jupyter_client.utils import run_sync
@@ -43,11 +42,13 @@ class NoteableEngine(Engine):
     async def _execute_managed_notebook(
         self, notebook_execution_manager: NotebookExecutionManager, kernel_name: str, **kwargs
     ):
+        # Extract kwargs
+        input_path = kwargs["input_path"]
         logger = kwargs.get("logger", engine_logger)
         job_instance_attempt_create_body = kwargs.get("job_instance_attempt")
 
         # Get file id and file version number from input_path
-        file_id, version_number = parse_noteable_file_id_and_version_number(kwargs["input_path"])
+        file_id, version_number = parse_noteable_file_id_and_version_number(input_path)
 
         # Get the version_id from the version_number if it exists
         # This would be the second time we call the API to get the version_id
@@ -61,19 +62,20 @@ class NoteableEngine(Engine):
             file_id, version_id, job_instance_attempt=job_instance_attempt_create_body
         )
 
-        async with httpx.AsyncClient() as plain_client:
-            resp = await plain_client.get(parameterized_notebook["presigned_download_url"])
-            resp.raise_for_status()
-
         extra_log_data = {
             "file_id": str(parameterized_notebook["id"]),
-            "job_instance_attempt_id": str(job_instance_attempt["id"]) if job_instance_attempt else None,
+            "job_instance_attempt_id": str(job_instance_attempt["id"])
+            if job_instance_attempt
+            else None,
         }
         logger.info("Created parameterized notebook", extra=extra_log_data)
 
         errored = False
         kernel_session_id = None
         try:
+            # Delay needed to allow RBAC rows for the new file to be created :(
+            await asyncio.sleep(1)
+
             rtu_client = await self.api_client.connect_realtime(parameterized_notebook["id"])
 
             # Updates the noteable notebook with changes papermill made to the notebook
@@ -81,7 +83,7 @@ class NoteableEngine(Engine):
             # parameters cell with a new cell tagged `injected-parameters`.
             await self.sync_noteable_nb_with_papermill(
                 rtu_client=rtu_client,
-                noteable_nb=Notebook.parse_obj(resp.json()),
+                noteable_nb=rtu_client.builder.nb,
                 papermill_nb=Notebook.parse_obj(notebook_execution_manager.nb),
             )
             logger.info("Synced notebook with papermill", extra=extra_log_data)
@@ -102,33 +104,46 @@ class NoteableEngine(Engine):
                 logger.info("Updated job instance attempt status to RUNNING", extra=extra_log_data)
 
             # Execute all cells
-            queued_execution = await rtu_client.queue_execution(run_all=True)
-            cells: list[CodeCell] = await asyncio.gather(*queued_execution)
-
             # Fetch error output and set it on the papermill managed notebook
-            for cell in cells:
+            for cell in notebook_execution_manager.nb.cells:
+                queued_execution = await rtu_client.queue_execution(cell_id=cell.id)
+                notebook_execution_manager.cell_start(cell)
+                executed_cell: CodeCell = await list(queued_execution)[0]
+                notebook_execution_manager.cell_complete(cell)
                 if rtu_client.cell_states.get(cell.id) == "finished_with_error":
                     errored = True
-                    koc = await self.api_client.get_output_collection(cell.output_collection_id)
-                    papermill_nb_cell = next(
-                        c for c in notebook_execution_manager.nb.cells if c.id == cell.id
+                    koc = await self.api_client.get_output_collection(
+                        executed_cell.output_collection_id
                     )
-                    papermill_nb_cell.outputs = [
+                    cell.outputs = [
                         self._convert_noteable_output_to_jupyter_output(output=output)
                         for output in koc.outputs
                     ]
+                    notebook_execution_manager.cell_exception(cell)
+                    break
 
             if job_instance_attempt:
+                status = "FAILED" if errored else "SUCCEEDED"
                 await self.api_client.client.patch(
                     f"/v1/job-instance-attempts/{job_instance_attempt['id']}",
-                    json={"status": "FAILED" if errored else "SUCCEEDED"},
+                    json={"status": status},
+                )
+                logger.info(
+                    f"Updated job instance attempt status to {status}",
+                    extra={
+                        **extra_log_data,
+                        "status": status,
+                    },
                 )
         except Exception as e:  # noqa
             if job_instance_attempt:
-                logger.info("Updated job instance attempt status to RUNNING", extra=extra_log_data)
                 await self.api_client.client.patch(
                     f"/v1/job-instance-attempts/{job_instance_attempt['id']}",
                     json={"status": "FAILED"},
+                )
+                logger.info(
+                    "Updated job instance attempt status to FAILED (due to internal error)",
+                    extra=extra_log_data,
                 )
             raise e
         finally:
@@ -151,8 +166,8 @@ class NoteableEngine(Engine):
         Papermill injects a new parameters cell with tag `injected-parameters` after a cell tagged `parameters`.
         """
 
-        noteable_nb_cell_ids = [cell['id'] for cell in noteable_nb.cells]
-        papermill_nb_cell_ids = [cell['id'] for cell in papermill_nb.cells]
+        noteable_nb_cell_ids = [cell.id for cell in noteable_nb.cells]
+        papermill_nb_cell_ids = [cell.id for cell in papermill_nb.cells]
 
         deleted_cell_ids = list(set(noteable_nb_cell_ids) - set(papermill_nb_cell_ids))
         added_cell_ids = list(set(papermill_nb_cell_ids) - set(noteable_nb_cell_ids))
@@ -162,7 +177,13 @@ class NoteableEngine(Engine):
         for cell_id in added_cell_ids:
             idx = papermill_nb_cell_ids.index(cell_id)
             after_id = papermill_nb_cell_ids[idx - 1] if idx > 0 else None
-            await rtu_client.add_cell(cell=papermill_nb.cells[idx], after_id=after_id)
+            # Edge case is when the cell_id is the first cell in papermill_nb
+            before_id = None
+            if idx == 0:
+                before_id = noteable_nb_cell_ids[0]
+            await rtu_client.add_cell(
+                cell=papermill_nb.cells[idx], after_id=after_id, before_id=before_id
+            )
 
     @staticmethod
     def _convert_noteable_output_to_jupyter_output(output):
