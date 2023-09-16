@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import Optional
 
 import nbformat
 import orjson
@@ -32,14 +33,18 @@ class NoteableEngine(Engine):
         js = resp.json()
         return js["parameterized_notebook"], js["job_instance_attempt"]
 
-    async def version_id_from_number(self, file_id, version_number) -> str:
+    async def get_file_id_and_version_from_path(self, input_path: str) -> tuple[str, Optional[str]]:
         # TODO: create a new v1 version of this endpoint
         #       that returns a presigned url instead of the full file contents
-        resp = await self.api_client.client.get(f"/files/{file_id}/versions/{version_number}")
-        resp.raise_for_status()
-        return resp.json()["file_version"]["id"]
+        file_id, version_number = parse_noteable_file_path(input_path)
+        version_id = None
+        if version_number is not None:
+            resp = await self.api_client.client.get(f"/files/{file_id}/versions/{version_number}")
+            resp.raise_for_status()
+            version_id = resp.json()["file_version"]["id"]
+        return file_id, version_id
 
-    async def _execute_managed_notebook(
+    async def async_execute_managed_notebook(
         self, notebook_execution_manager: NotebookExecutionManager, kernel_name: str, **kwargs
     ):
         # Extract kwargs
@@ -47,15 +52,8 @@ class NoteableEngine(Engine):
         logger = kwargs.get("logger", engine_logger)
         job_instance_attempt_create_body = kwargs.get("job_instance_attempt")
 
-        # Get file id and file version number from input_path
-        file_id, version_number = parse_noteable_file_path(input_path)
-
-        # Get the version_id from the version_number if it exists
-        # This would be the second time we call the API to get the version_id
-        # First is in NoteableHandler where the file contents are fetched
-        version_id = None
-        if version_number is not None:
-            version_id = await self.version_id_from_number(file_id, version_number)
+        # Get file id and version id from input_path
+        file_id, version_id = await self.get_file_id_and_version_from_path(input_path)
 
         # Create a parameterized notebook with the file_id as the source notebook
         parameterized_notebook, job_instance_attempt = await self.create_parameterized_notebook(
@@ -103,8 +101,6 @@ class NoteableEngine(Engine):
                 )
                 logger.info("Updated job instance attempt status to RUNNING", extra=extra_log_data)
 
-            # Execute all cells
-            # Fetch error output and set it on the papermill managed notebook
             for cell in notebook_execution_manager.nb.cells:
                 queued_execution = await rtu_client.queue_execution(cell_id=cell.id)
                 notebook_execution_manager.cell_start(cell)
@@ -112,6 +108,7 @@ class NoteableEngine(Engine):
                 notebook_execution_manager.cell_complete(cell)
                 if rtu_client.cell_states.get(cell.id) == "finished_with_error":
                     errored = True
+                    # Fetch error output and set it on the papermill managed notebook
                     output_collection = await self.api_client.get_output_collection(
                         executed_cell.output_collection_id
                     )
@@ -155,7 +152,7 @@ class NoteableEngine(Engine):
 
     @classmethod
     def execute_managed_notebook(cls, nb_man, kernel_name, **kwargs):
-        return run_sync(cls()._execute_managed_notebook)(nb_man, kernel_name, **kwargs)
+        return run_sync(cls().async_execute_managed_notebook)(nb_man, kernel_name, **kwargs)
 
     @staticmethod
     async def sync_noteable_nb_with_papermill(
