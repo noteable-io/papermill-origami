@@ -1,5 +1,4 @@
 """The iorw module provides the handlers for registration with papermill to read/write Notebooks"""
-import orjson
 from jupyter_client.utils import run_sync
 from origami.models.notebook import Notebook
 
