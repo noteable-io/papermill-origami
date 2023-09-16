@@ -1,6 +1,7 @@
 """The iorw module provides the handlers for registration with papermill to read/write Notebooks"""
 import orjson
 from jupyter_client.utils import run_sync
+from origami.models.notebook import Notebook
 
 from papermill_origami.dependencies import get_api_client
 from papermill_origami.path_util import parse_noteable_file_path
@@ -21,7 +22,7 @@ class NoteableHandler:
             resp.raise_for_status()
             js = resp.json()
             file_contents = js["content"]
-            return orjson.dumps(file_contents)
+            return Notebook.parse_obj(file_contents).json()
         else:
             rtu_client = await client.connect_realtime(file_id)
             await rtu_client.shutdown()
