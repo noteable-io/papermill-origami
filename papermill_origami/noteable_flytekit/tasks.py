@@ -63,7 +63,7 @@ class NoteableNotebookTask(NotebookTask):
     @property
     def output_notebook_path(self) -> str:
         # ensure the output path is on the local filesystem
-        return parse_noteable_file_id(super().output_notebook_path)
+        return parse_noteable_file_id_and_version_number(super().output_notebook_path)
 
     @property
     def rendered_output_path(self) -> str:

@@ -112,12 +112,12 @@ class NoteableEngine(Engine):
                 notebook_execution_manager.cell_complete(cell)
                 if rtu_client.cell_states.get(cell.id) == "finished_with_error":
                     errored = True
-                    koc = await self.api_client.get_output_collection(
+                    output_collection = await self.api_client.get_output_collection(
                         executed_cell.output_collection_id
                     )
                     cell.outputs = [
                         self._convert_noteable_output_to_jupyter_output(output=output)
-                        for output in koc.outputs
+                        for output in output_collection.outputs
                     ]
                     notebook_execution_manager.cell_exception(cell)
                     break
