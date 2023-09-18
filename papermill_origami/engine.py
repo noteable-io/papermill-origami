@@ -9,7 +9,7 @@ from origami.clients.rtu import RTUClient
 from origami.models.notebook import CodeCell, Notebook
 from papermill.engines import Engine, NotebookExecutionManager
 
-from papermill_origami.dependencies import get_api_client
+from papermill_origami.dependencies import get_api_client, get_settings
 from papermill_origami.path_util import parse_noteable_file_path
 
 engine_logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ engine_logger = logging.getLogger(__name__)
 
 class NoteableEngine(Engine):
     def __init__(self):
+        self.settings = get_settings()
         self.api_client = get_api_client()
 
     async def create_parameterized_notebook(
@@ -72,7 +73,7 @@ class NoteableEngine(Engine):
         kernel_session_id = None
         try:
             # Delay needed to allow RBAC rows for the new file to be created :(
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
 
             rtu_client = await self.api_client.connect_realtime(parameterized_notebook["id"])
 
@@ -147,6 +148,12 @@ class NoteableEngine(Engine):
             # if not errored:
             if kernel_session_id:
                 await self.api_client.shutdown_kernel(kernel_session_id)
+
+        # Set the executed_notebook_url and parameterized_notebook_id metadata
+        # for downstream consumers of the papermill managed notebook
+        parameterized_url = f"{self.settings.public_url}/f/{parameterized_notebook['id']}"
+        notebook_execution_manager.nb.metadata["executed_notebook_url"] = parameterized_url
+        notebook_execution_manager.nb.metadata["parameterized_notebook_id"] = parameterized_notebook['id']
 
         return notebook_execution_manager.nb
 

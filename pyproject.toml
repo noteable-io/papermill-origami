@@ -42,6 +42,7 @@ flytekitplugins-papermill = {version = "^1.2.1", optional = true}
 apache-airflow = { version = "^2.4.2", optional = true }
 prefect-jupyter = { version = "^0.2.0", optional = true }
 noteable-origami = "^1.0.0"
+structlog = "^23.1.0"
 
 [tool.poetry.dev-dependencies]
 flake8-docstrings = "^1.6.0"
@@ -66,6 +67,7 @@ prefect = ["prefect-jupyter"]
 
 [tool.poetry.plugins."papermill.io"]
 "https://" = "papermill_origami.iorw:NoteableHandler"
+"http://" = "papermill_origami.iorw:NoteableHandler"
 
 [tool.poetry.plugins."papermill.engine"]
 noteable = "papermill_origami.engine:NoteableEngine"
