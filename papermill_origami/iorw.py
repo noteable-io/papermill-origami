@@ -1,6 +1,7 @@
 """The iorw module provides the handlers for registration with papermill to read/write Notebooks"""
 import functools
 import json
+import os
 from urllib.parse import urlparse
 
 import httpx
@@ -24,7 +25,10 @@ def _ensure_client(func):
             # If we're not a handler, we need to create a handler instance
             # and then bind the function to it
             with NoteableClient() as client:
-                if (url := urlparse(obj)).scheme == "https" and url.netloc != client.config.domain:
+                if (url := urlparse(obj)).scheme in (
+                    "https",
+                    "http",
+                ) and url.netloc != client.config.domain:
                     logger.warning(
                         "The domain from the file URL does not match the domain from the default client config"
                     )
@@ -51,6 +55,7 @@ class NoteableHandler:
         # Wrap the async call since we're in a blocking method
         file_version: FileVersion = run_sync(self.client.get_version_or_none)(id)
         if file_version is not None:
+            # Only used for local testing with minio in a k8s cluster
             resp = httpx.get(file_version.content_presigned_url)
             resp.raise_for_status()
             file_contents = resp.json()

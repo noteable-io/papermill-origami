@@ -34,6 +34,6 @@ def parse_noteable_file_id(path):
     url = urlparse(path)
     if url.scheme == "noteable":
         return url.netloc
-    elif url.scheme == "https":
+    elif url.scheme in ("https", "http"):
         paths = url.path.strip('/').split('/')
         return paths[1]
